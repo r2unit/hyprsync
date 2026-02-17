@@ -3,6 +3,7 @@
 #include "setup.hpp"
 #include "git.hpp"
 #include "sync.hpp"
+#include "tui.hpp"
 #include "upgrade.hpp"
 #include "util.hpp"
 
@@ -209,7 +210,19 @@ int Cli::cmd_sync() {
         auto results = sync.sync_all(dry_run);
 
         int failures = 0;
+        bool has_conflicts = false;
+
         for (const auto& r : results) {
+            if (r.has_conflicts) {
+                has_conflicts = true;
+                std::cerr << "conflicts detected:\n";
+                for (const auto& f : r.conflict_files) {
+                    std::cerr << "  " << f << "\n";
+                }
+                std::cerr << "\nresolve with 'hyprsync conflicts resolve' before syncing\n";
+                return 1;
+            }
+
             if (r.success) {
                 if (r.files_synced > 0 || !options_.quiet) {
                     std::cout << "synced " << r.group_name << " to "
@@ -220,6 +233,10 @@ int Cli::cmd_sync() {
                           << r.device_name << ": " << r.error_message << "\n";
                 failures++;
             }
+        }
+
+        if (has_conflicts) {
+            return 1;
         }
 
         if (failures > 0) {
@@ -410,9 +427,95 @@ int Cli::cmd_conflicts() {
         return 0;
     }
 
-    std::cout << "conflicts:\n";
+    std::cout << "found " << conflicts.size() << " conflict(s):\n\n";
+
     for (const auto& c : conflicts) {
         std::cout << "  " << c.path.string() << "\n";
+    }
+
+    std::cout << "\n";
+
+    bool resolve_all = false;
+    if (!options_.args.empty() && options_.args[0] == "resolve") {
+        resolve_all = true;
+    }
+
+    if (!resolve_all) {
+        std::cout << "run 'hyprsync conflicts resolve' to resolve interactively\n";
+        std::cout << "or 'hyprsync conflicts resolve --auto' to use configured strategy ("
+                  << conflict_strategy_to_string(config_->conflict_strategy) << ")\n";
+        return 0;
+    }
+
+    bool auto_resolve = false;
+    for (const auto& arg : options_.args) {
+        if (arg == "--auto" || arg == "-a") {
+            auto_resolve = true;
+            break;
+        }
+    }
+
+    if (auto_resolve) {
+        std::cout << "resolving conflicts using strategy: "
+                  << conflict_strategy_to_string(config_->conflict_strategy) << "\n\n";
+
+        int resolved = 0;
+        for (const auto& c : conflicts) {
+            bool ok = git.resolve_conflict(c.path, config_->conflict_strategy);
+            if (ok) {
+                std::cout << "  resolved: " << c.path.string() << "\n";
+                resolved++;
+            } else {
+                std::cout << "  skipped (manual required): " << c.path.string() << "\n";
+            }
+        }
+
+        if (resolved > 0) {
+            git.commit("hyprsync: resolved " + std::to_string(resolved) + " conflict(s)");
+        }
+
+        std::cout << "\nresolved " << resolved << " of " << conflicts.size() << " conflict(s)\n";
+        return 0;
+    }
+
+    Tui tui;
+
+    std::vector<std::string> strategies = {
+        "newest_wins - keep the file with the most recent modification time",
+        "keep_both   - save both versions as file.local and file.remote",
+        "manual      - skip and resolve manually later"
+    };
+
+    for (const auto& c : conflicts) {
+        std::cout << "\nconflict: " << c.path.string() << "\n";
+
+        int choice = tui.select("resolution strategy:", strategies, 0);
+
+        ConflictStrategy strategy;
+        switch (choice) {
+            case 0: strategy = ConflictStrategy::NewestWins; break;
+            case 1: strategy = ConflictStrategy::KeepBoth; break;
+            default: strategy = ConflictStrategy::Manual; break;
+        }
+
+        if (strategy == ConflictStrategy::Manual) {
+            std::cout << "  skipped\n";
+            continue;
+        }
+
+        bool ok = git.resolve_conflict(c.path, strategy);
+        if (ok) {
+            std::cout << "  resolved\n";
+        } else {
+            std::cout << "  failed to resolve\n";
+        }
+    }
+
+    if (!git.has_conflicts()) {
+        git.commit("hyprsync: resolved conflicts");
+        std::cout << "\nall conflicts resolved\n";
+    } else {
+        std::cout << "\nsome conflicts remain - resolve manually or run again\n";
     }
 
     return 0;
@@ -497,6 +600,8 @@ void Cli::print_usage() const {
     std::cout << "    log               show sync history\n";
     std::cout << "    ping              test device connectivity\n";
     std::cout << "    conflicts         list sync conflicts\n";
+    std::cout << "    conflicts resolve resolve conflicts interactively\n";
+    std::cout << "    conflicts resolve --auto  resolve using configured strategy\n";
     std::cout << "    upgrade [version] upgrade to latest or specific version\n";
     std::cout << "    upgrade list      list available versions\n";
     std::cout << "    upgrade check     check for updates\n";

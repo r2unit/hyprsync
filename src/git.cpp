@@ -205,8 +205,26 @@ bool GitManager::resolve_conflict(const std::filesystem::path& file,
             auto ours_file = repo_file.string() + "." + hostname_;
             auto theirs_file = repo_file.string() + ".remote";
 
-            git_exec({"show", ":2:" + file.string()});
-            git_exec({"show", ":3:" + file.string()});
+            auto ours_result = git_exec({"show", ":2:" + file.string()});
+            if (ours_result.success()) {
+                std::ofstream ours_out(ours_file);
+                if (ours_out.is_open()) {
+                    ours_out << ours_result.stdout_output;
+                    ours_out.close();
+                    spdlog::info("saved local version as: {}", ours_file);
+                }
+            }
+
+            auto theirs_result = git_exec({"show", ":3:" + file.string()});
+            if (theirs_result.success()) {
+                std::ofstream theirs_out(theirs_file);
+                if (theirs_out.is_open()) {
+                    theirs_out << theirs_result.stdout_output;
+                    theirs_out.close();
+                    spdlog::info("saved remote version as: {}", theirs_file);
+                }
+            }
+
             result = git_exec({"checkout", "--theirs", file.string()});
             break;
         }

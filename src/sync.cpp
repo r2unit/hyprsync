@@ -62,6 +62,22 @@ SyncResult SyncEngine::sync_group(const SyncGroup& group,
 std::vector<SyncResult> SyncEngine::sync_all(bool dry_run) {
     std::vector<SyncResult> results;
 
+    if (git_.has_conflicts()) {
+        spdlog::warn("existing conflicts detected - resolve with 'hyprsync conflicts resolve' before syncing");
+        SyncResult conflict_result;
+        conflict_result.success = false;
+        conflict_result.has_conflicts = true;
+        conflict_result.error_message = "unresolved conflicts exist";
+
+        auto conflicts = git_.get_conflicts();
+        for (const auto& c : conflicts) {
+            conflict_result.conflict_files.push_back(c.path.string());
+        }
+
+        results.push_back(conflict_result);
+        return results;
+    }
+
     if (!config_.hooks.pre_sync.empty()) {
         exec(config_.hooks.pre_sync);
     }

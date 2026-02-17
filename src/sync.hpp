@@ -14,6 +14,8 @@ struct SyncResult {
     std::string group_name;
     int files_synced;
     std::string error_message;
+    bool has_conflicts = false;
+    std::vector<std::string> conflict_files;
 };
 
 struct DiffResult {
