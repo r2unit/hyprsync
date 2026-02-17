@@ -1,6 +1,8 @@
 #include "cli.hpp"
+#include "daemon.hpp"
 #include "setup.hpp"
 #include "git.hpp"
+#include "sync.hpp"
 #include "upgrade.hpp"
 #include "util.hpp"
 
@@ -103,6 +105,8 @@ int Cli::run() {
         return cmd_ping();
     } else if (options_.command == "conflicts") {
         return cmd_conflicts();
+    } else if (options_.command == "restore") {
+        return cmd_restore();
     } else if (options_.command == "upgrade") {
         return cmd_upgrade();
     } else if (options_.command == "version") {
@@ -135,7 +139,8 @@ int Cli::cmd_daemon() {
         return 1;
     }
 
-    std::cout << "daemon not yet implemented\n";
+    Daemon daemon(*config_);
+    daemon.run();
     return 0;
 }
 
@@ -147,7 +152,85 @@ int Cli::cmd_sync() {
         return 1;
     }
 
-    std::cout << "sync not yet implemented\n";
+    GitManager git(config_->git, config_->hostname);
+
+    if (!git.is_initialized()) {
+        std::cerr << "git repo not initialized. run 'hyprsync init' first.\n";
+        return 1;
+    }
+
+    SyncEngine sync(*config_, git);
+
+    bool dry_run = options_.dry_run || config_->dry_run;
+
+    if (dry_run) {
+        std::cout << "dry-run mode: showing what would be synced\n\n";
+    }
+
+    if (!options_.group.empty() && !options_.device.empty()) {
+        const SyncGroup* group = nullptr;
+        const Device* device = nullptr;
+
+        for (const auto& g : config_->sync_groups) {
+            if (g.name == options_.group) {
+                group = &g;
+                break;
+            }
+        }
+
+        for (const auto& d : config_->devices) {
+            if (d.name == options_.device) {
+                device = &d;
+                break;
+            }
+        }
+
+        if (!group) {
+            std::cerr << "unknown group: " << options_.group << "\n";
+            return 1;
+        }
+
+        if (!device) {
+            std::cerr << "unknown device: " << options_.device << "\n";
+            return 1;
+        }
+
+        auto result = sync.sync_group(*group, *device, dry_run);
+
+        if (result.success) {
+            std::cout << "synced " << result.group_name << " to "
+                      << result.device_name << "\n";
+        } else {
+            std::cerr << "failed to sync " << result.group_name << " to "
+                      << result.device_name << ": " << result.error_message << "\n";
+            return 1;
+        }
+    } else {
+        auto results = sync.sync_all(dry_run);
+
+        int failures = 0;
+        for (const auto& r : results) {
+            if (r.success) {
+                if (r.files_synced > 0 || !options_.quiet) {
+                    std::cout << "synced " << r.group_name << " to "
+                              << r.device_name << "\n";
+                }
+            } else {
+                std::cerr << "failed: " << r.group_name << " to "
+                          << r.device_name << ": " << r.error_message << "\n";
+                failures++;
+            }
+        }
+
+        if (failures > 0) {
+            return 1;
+        }
+    }
+
+    if (!dry_run) {
+        std::cout << "\nsync complete\n";
+    }
+
     return 0;
 }
 
@@ -335,6 +418,27 @@ int Cli::cmd_conflicts() {
     return 0;
 }
 
+int Cli::cmd_restore() {
+    load_config();
+
+    if (!config_.has_value()) {
+        std::cerr << "no config found. run 'hyprsync init' first.\n";
+        return 1;
+    }
+
+    GitManager git(config_->git, config_->hostname);
+
+    if (!git.is_initialized()) {
+        std::cerr << "git repo not initialized.\n";
+        return 1;
+    }
+
+    git.restore(config_->sync_groups);
+    std::cout << "files restored from repo\n";
+
+    return 0;
+}
+
 int Cli::cmd_upgrade() {
     Upgrader upgrader;
 
@@ -387,6 +491,7 @@ void Cli::print_usage() const {
     std::cout << "    init              interactive setup wizard\n";
     std::cout << "    daemon            start the sync daemon\n";
     std::cout << "    sync              run a one-shot sync\n";
+    std::cout << "    restore           restore files from repo to original locations\n";
     std::cout << "    status            show sync status\n";
     std::cout << "    diff [device]     show pending changes\n";
     std::cout << "    log               show sync history\n";
