@@ -273,7 +273,14 @@ int Cli::cmd_status() {
     std::cout << "  sync groups: " << config_->sync_groups.size() << "\n";
     std::cout << "\n";
 
-    if (git.has_changes()) {
+    if (git.has_conflicts()) {
+        auto conflicts = git.get_conflicts();
+        std::cout << "  conflicts: " << conflicts.size() << "\n";
+        for (const auto& c : conflicts) {
+            std::cout << "    " << c.path.string() << "\n";
+        }
+        std::cout << "\n  resolve with 'hyprsync conflicts resolve'\n";
+    } else if (git.has_changes()) {
         std::cout << "  local changes pending:\n";
         auto files = git.changed_files();
         for (const auto& f : files) {
