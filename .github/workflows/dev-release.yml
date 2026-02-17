@@ -35,23 +35,7 @@ jobs:
 
   build:
     needs: version
-    strategy:
-      matrix:
-        include:
-          - os: ubuntu-latest
-            arch: x86_64
-            artifact: hyprsync-linux-amd64
-          - os: ubuntu-latest
-            arch: aarch64
-            artifact: hyprsync-linux-arm64
-          - os: macos-latest
-            arch: x86_64
-            artifact: hyprsync-macos-amd64
-          - os: macos-14
-            arch: arm64
-            artifact: hyprsync-macos-arm64
-
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -59,21 +43,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install dependencies (Linux)
-        if: runner.os == 'Linux'
+      - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake git
-
-      - name: Install cross-compiler (Linux ARM64)
-        if: runner.os == 'Linux' && matrix.arch == 'aarch64'
-        run: |
-          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-
-      - name: Install dependencies (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install cmake
 
       - name: Clone vendored dependencies
         run: |
@@ -82,40 +55,21 @@ jobs:
           git clone --depth 1 https://github.com/gabime/spdlog.git vendor/spdlog
           git clone --depth 1 https://github.com/google/googletest.git vendor/googletest
 
-      - name: Build (Linux x86_64)
-        if: runner.os == 'Linux' && matrix.arch == 'x86_64'
+      - name: Build
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
           cmake --build build -j$(nproc)
-
-      - name: Build (Linux ARM64)
-        if: runner.os == 'Linux' && matrix.arch == 'aarch64'
-        run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DBUILD_TESTING=OFF \
-            -DCMAKE_SYSTEM_NAME=Linux \
-            -DCMAKE_SYSTEM_PROCESSOR=aarch64 \
-            -DCMAKE_C_COMPILER=aarch64-linux-gnu-gcc \
-            -DCMAKE_CXX_COMPILER=aarch64-linux-gnu-g++
-          cmake --build build -j$(nproc)
-
-      - name: Build (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
-          cmake --build build -j$(sysctl -n hw.ncpu)
 
       - name: Prepare release asset
         run: |
-          cp build/hyprsync ${{ matrix.artifact }}
-          chmod +x ${{ matrix.artifact }}
+          cp build/hyprsync hyprsync-linux-amd64
+          chmod +x hyprsync-linux-amd64
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.artifact }}
+          name: hyprsync-linux-amd64
+          path: hyprsync-linux-amd64
 
   test:
     needs: build
@@ -164,9 +118,6 @@ jobs:
         run: |
           mkdir -p release
           cp artifacts/hyprsync-linux-amd64/hyprsync-linux-amd64 release/
-          cp artifacts/hyprsync-linux-arm64/hyprsync-linux-arm64 release/
-          cp artifacts/hyprsync-macos-amd64/hyprsync-macos-amd64 release/
-          cp artifacts/hyprsync-macos-arm64/hyprsync-macos-arm64 release/
           chmod +x release/*
 
       - name: Delete previous dev release
@@ -188,15 +139,12 @@ jobs:
             **Commit:** ${{ github.sha }}
             **Branch:** ${{ github.ref_name }}
             
-            > This is a development pre-release. Use at your own risk.
+            > This is a development pre-release for Linux only. Use at your own risk.
             
             ### Downloads
             | Platform | Architecture | File |
             |----------|--------------|------|
             | Linux | x86_64 (Intel/AMD) | `hyprsync-linux-amd64` |
-            | Linux | ARM64 | `hyprsync-linux-arm64` |
-            | macOS | x86_64 (Intel) | `hyprsync-macos-amd64` |
-            | macOS | ARM64 (Apple Silicon) | `hyprsync-macos-arm64` |
             
             ### Install (Linux)
             ```bash
@@ -204,9 +152,6 @@ jobs:
             ```
           files: |
             release/hyprsync-linux-amd64
-            release/hyprsync-linux-arm64
-            release/hyprsync-macos-amd64
-            release/hyprsync-macos-arm64
           draft: false
           prerelease: true
         env:
