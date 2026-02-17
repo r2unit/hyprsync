@@ -7,6 +7,9 @@ on:
       - develop
       - development
 
+permissions:
+  contents: write
+
 jobs:
   version:
     runs-on: ubuntu-latest
