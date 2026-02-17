@@ -81,7 +81,12 @@ check_and_install ssh openssh
 
 if [ "$DEV_MODE" = true ]; then
     echo "fetching development release..."
-    LATEST="dev"
+    LATEST=$(curl -s "https://api.github.com/repos/$REPO/releases" | grep '"tag_name"' | grep -E 'dev\.' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+
+    if [ -z "$LATEST" ]; then
+        echo "error: no development release found"
+        exit 1
+    fi
 else
     echo "fetching latest release..."
     LATEST=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')

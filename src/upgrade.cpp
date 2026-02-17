@@ -39,7 +39,8 @@ std::optional<Version> Version::parse(const std::string& version_str) {
         str = str.substr(1);
     }
 
-    std::regex pattern("(\\d{4})\\.(\\d{1,2})\\.(\\d+)");
+    // <lorenzo> match CalVer met optionele -dev.hash suffix
+    std::regex pattern("(\\d{4})\\.(\\d{1,2})\\.(\\d+)(-dev\\.[a-f0-9]+)?");
     std::smatch match;
 
     if (std::regex_match(str, match, pattern)) {

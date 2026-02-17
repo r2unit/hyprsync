@@ -123,17 +123,19 @@ jobs:
           cp artifacts/hyprsync-linux-amd64/hyprsync-linux-amd64 release/
           chmod +x release/*
 
-      - name: Delete previous dev release
+      - name: Delete previous dev releases
         run: |
-          gh release delete dev --yes || true
-          git push origin :refs/tags/dev || true
+          for tag in $(gh release list --json tagName -q '.[].tagName' | grep -E '^v.*-dev'); do
+            gh release delete "$tag" --yes || true
+            git push origin ":refs/tags/$tag" || true
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Development Release
         uses: softprops/action-gh-release@v1
         with:
-          tag_name: dev
+          tag_name: v${{ needs.version.outputs.version }}
           name: Development Build (${{ needs.version.outputs.version }})
           body: |
             ## Development Build
