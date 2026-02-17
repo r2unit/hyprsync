@@ -371,38 +371,71 @@ bool Upgrader::upgrade(const Release& release) {
 }
 
 bool Upgrader::upgrade_to_latest() {
-    std::cout << "checking for updates...\n";
+    std::cout << "checking for updates...\n\n";
 
-    auto latest = get_latest_release();
-    if (!latest.has_value()) {
-        std::cout << "could not fetch release information\n";
+    auto releases = fetch_releases();
+    if (releases.empty()) {
+        std::cerr << "error: could not fetch releases from GitHub\n";
+        std::cerr << "check your internet connection and try again\n";
         return false;
+    }
+
+    std::optional<Release> latest;
+    for (const auto& release : releases) {
+        if (!release.prerelease) {
+            latest = release;
+            break;
+        }
+    }
+
+    if (!latest.has_value()) {
+        std::cout << "no stable releases available yet\n";
+        std::cout << "current version: " << current_version().to_string() << "\n\n";
+
+        for (const auto& release : releases) {
+            if (release.prerelease) {
+                std::cout << "development version available: " << release.version.to_string() << "\n";
+                std::cout << "install with: curl -fsSL https://raw.githubusercontent.com/r2unit/hyprsync/devel/install.sh | bash -s -- --dev\n";
+                break;
+            }
+        }
+        return true;
     }
 
     auto current = current_version();
     if (latest->version == current) {
-        std::cout << "already running the latest version (" << current.to_string() << ")\n";
+        std::cout << "you are on the latest version (" << current.to_string() << ") :)\n";
         return true;
     }
 
     if (latest->version < current) {
-        std::cout << "running a newer version than the latest release\n";
+        std::cout << "you are running a newer version than the latest release :)\n";
         std::cout << "  current: " << current.to_string() << "\n";
         std::cout << "  latest:  " << latest->version.to_string() << "\n";
         return true;
     }
 
-    std::cout << "new version available: " << latest->version.to_string() << "\n";
+    std::cout << "new version available!\n";
     std::cout << "  current: " << current.to_string() << "\n";
+    std::cout << "  latest:  " << latest->version.to_string() << "\n\n";
 
     return upgrade(latest.value());
 }
 
 bool Upgrader::upgrade_to_version(const std::string& version) {
+    std::cout << "looking for version " << version << "...\n\n";
+
     auto release = get_release(version);
     if (!release.has_value()) {
-        std::cout << "version " << version << " not found\n";
+        std::cerr << "error: version " << version << " not found\n";
+        std::cerr << "run 'hyprsync upgrade list' to see available versions\n";
         return false;
+    }
+
+    auto current = current_version();
+    if (release->version == current) {
+        std::cout << "you are already on version " << version << " :)\n";
+        return true;
     }
 
     return upgrade(release.value());
@@ -414,24 +447,25 @@ void Upgrader::list_available_versions() const {
     auto releases = fetch_releases();
 
     if (releases.empty()) {
-        std::cout << "no releases found\n";
+        std::cerr << "error: could not fetch releases from GitHub\n";
+        std::cerr << "check your internet connection and try again\n";
         return;
     }
 
     auto current = current_version();
 
-    std::cout << "available versions:\n";
+    std::cout << "available versions:\n\n";
     for (const auto& release : releases) {
         std::cout << "  " << release.version.to_string();
 
         if (release.version == current) {
-            std::cout << " (installed)";
+            std::cout << " <- installed";
         } else if (release.version > current) {
             std::cout << " (newer)";
         }
 
         if (release.prerelease) {
-            std::cout << " [prerelease]";
+            std::cout << " [dev]";
         }
 
         if (!release.published_at.empty()) {
@@ -440,6 +474,7 @@ void Upgrader::list_available_versions() const {
 
         std::cout << "\n";
     }
+    std::cout << "\n";
 }
 
 void Upgrader::write_install_marker(InstallMethod method) {

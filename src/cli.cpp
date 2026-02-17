@@ -564,17 +564,22 @@ int Cli::cmd_upgrade() {
     }
 
     if (arg == "check" || arg == "--check") {
-        if (upgrader.has_update()) {
-            auto latest = upgrader.get_latest_release();
-            if (latest.has_value()) {
-                std::cout << "update available: " << latest->version.to_string() << "\n";
-                std::cout << "current version: " << upgrader.current_version().to_string() << "\n";
-            }
-            return 0;
-        } else {
-            std::cout << "already running the latest version\n";
+        auto latest = upgrader.get_latest_release();
+        if (!latest.has_value()) {
+            std::cout << "no stable releases available yet\n";
+            std::cout << "current version: " << upgrader.current_version().to_string() << "\n";
             return 0;
         }
+
+        auto current = upgrader.current_version();
+        if (latest->version > current) {
+            std::cout << "update available: " << latest->version.to_string() << "\n";
+            std::cout << "current version: " << current.to_string() << "\n";
+            std::cout << "\nrun 'hyprsync upgrade' to update\n";
+        } else {
+            std::cout << "you are on the latest version (" << current.to_string() << ") :)\n";
+        }
+        return 0;
     }
 
     return upgrader.upgrade_to_version(arg) ? 0 : 1;
