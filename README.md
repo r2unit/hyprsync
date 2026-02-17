@@ -1,2 +1,2 @@
 # hyprsync
-A lightweight sync daemon for Hyprland users who work across multiple machines
+HyprSync is a minimal, dependency-light daemon that keeps dotfiles, configs, and arbitrary files synchronized between multiple Linux machines. It uses SSH keys for authentication and rsync over SSH for file transfer. It supports both LAN (direct IP) and remote sync over Tailscale. Both sides run the daemon and communicate bidirectionally — there is no "server" or "client", every node is a peer.
