@@ -1,6 +1,7 @@
 #include "cli.hpp"
 #include "setup.hpp"
 #include "git.hpp"
+#include "upgrade.hpp"
 #include "util.hpp"
 
 #include <hyprsync/version.hpp>
@@ -102,6 +103,8 @@ int Cli::run() {
         return cmd_ping();
     } else if (options_.command == "conflicts") {
         return cmd_conflicts();
+    } else if (options_.command == "upgrade") {
+        return cmd_upgrade();
     } else if (options_.command == "version") {
         return cmd_version();
     } else if (options_.command == "help") {
@@ -332,8 +335,40 @@ int Cli::cmd_conflicts() {
     return 0;
 }
 
+int Cli::cmd_upgrade() {
+    Upgrader upgrader;
+
+    if (options_.args.empty()) {
+        return upgrader.upgrade_to_latest() ? 0 : 1;
+    }
+
+    std::string arg = options_.args[0];
+
+    if (arg == "list" || arg == "--list" || arg == "-l") {
+        upgrader.list_available_versions();
+        return 0;
+    }
+
+    if (arg == "check" || arg == "--check") {
+        if (upgrader.has_update()) {
+            auto latest = upgrader.get_latest_release();
+            if (latest.has_value()) {
+                std::cout << "update available: " << latest->version.to_string() << "\n";
+                std::cout << "current version: " << upgrader.current_version().to_string() << "\n";
+            }
+            return 0;
+        } else {
+            std::cout << "already running the latest version\n";
+            return 0;
+        }
+    }
+
+    return upgrader.upgrade_to_version(arg) ? 0 : 1;
+}
+
 int Cli::cmd_version() {
     std::cout << "hyprsync " << VERSION << "\n";
+    std::cout << "  build: " << BUILD_DATE << " (" << GIT_COMMIT << ")\n";
     return 0;
 }
 
@@ -349,15 +384,18 @@ void Cli::print_usage() const {
     std::cout << "    hyprsync <command> [options]\n";
     std::cout << "\n";
     std::cout << "commands:\n";
-    std::cout << "    init            interactive setup wizard\n";
-    std::cout << "    daemon          start the sync daemon\n";
-    std::cout << "    sync            run a one-shot sync\n";
-    std::cout << "    status          show sync status\n";
-    std::cout << "    diff [device]   show pending changes\n";
-    std::cout << "    log             show sync history\n";
-    std::cout << "    ping            test device connectivity\n";
-    std::cout << "    conflicts       list sync conflicts\n";
-    std::cout << "    version         show version info\n";
+    std::cout << "    init              interactive setup wizard\n";
+    std::cout << "    daemon            start the sync daemon\n";
+    std::cout << "    sync              run a one-shot sync\n";
+    std::cout << "    status            show sync status\n";
+    std::cout << "    diff [device]     show pending changes\n";
+    std::cout << "    log               show sync history\n";
+    std::cout << "    ping              test device connectivity\n";
+    std::cout << "    conflicts         list sync conflicts\n";
+    std::cout << "    upgrade [version] upgrade to latest or specific version\n";
+    std::cout << "    upgrade list      list available versions\n";
+    std::cout << "    upgrade check     check for updates\n";
+    std::cout << "    version           show version info\n";
     std::cout << "\n";
     std::cout << "options:\n";
     std::cout << "    -c, --config <path>   config file path\n";
@@ -372,7 +410,8 @@ void Cli::print_usage() const {
     std::cout << "    hyprsync init\n";
     std::cout << "    hyprsync sync --dry-run\n";
     std::cout << "    hyprsync sync -g hyprland -d desktop\n";
-    std::cout << "    hyprsync ping\n";
+    std::cout << "    hyprsync upgrade\n";
+    std::cout << "    hyprsync upgrade 2026.2.1\n";
     std::cout << "\n";
 }
 

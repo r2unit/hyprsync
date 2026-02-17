@@ -40,6 +40,7 @@ private:
     int cmd_log();
     int cmd_ping();
     int cmd_conflicts();
+    int cmd_upgrade();
     int cmd_version();
     int cmd_help();
 
