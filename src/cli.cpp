@@ -59,7 +59,7 @@ void Cli::load_config() {
     }
 
     try {
-        config_ = load_config(options_.config_path);
+        config_ = hyprsync::load_config(options_.config_path);
 
         if (options_.dry_run) {
             config_->dry_run = true;
