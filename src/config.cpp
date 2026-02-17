@@ -54,53 +54,39 @@ Config load_config(const std::filesystem::path& path) {
 
     Config config;
 
-    if (auto general = tbl["general"].as_table()) {
-        config.hostname = general->get("hostname")->value_or(get_hostname());
-        config.mode = sync_mode_from_string(
-            general->get("mode")->value_or(std::string("bidirectional"))
-        );
-        config.conflict_strategy = conflict_strategy_from_string(
-            general->get("conflict_strategy")->value_or(std::string("newest_wins"))
-        );
-        config.poll_interval = general->get("poll_interval")->value_or(0);
-        config.dry_run = general->get("dry_run")->value_or(false);
-        config.log_level = general->get("log_level")->value_or(std::string("info"));
-    }
+    config.hostname = tbl["general"]["hostname"].value_or(get_hostname());
+    config.mode = sync_mode_from_string(
+        tbl["general"]["mode"].value_or(std::string("bidirectional"))
+    );
+    config.conflict_strategy = conflict_strategy_from_string(
+        tbl["general"]["conflict_strategy"].value_or(std::string("newest_wins"))
+    );
+    config.poll_interval = tbl["general"]["poll_interval"].value_or(0);
+    config.dry_run = tbl["general"]["dry_run"].value_or(false);
+    config.log_level = tbl["general"]["log_level"].value_or(std::string("info"));
 
-    if (auto git = tbl["git"].as_table()) {
-        std::string repo_str = git->get("repo")->value_or(
-            std::string("~/.local/share/hyprsync")
-        );
-        config.git.repo = expand_path(repo_str);
-        config.git.auto_commit = git->get("auto_commit")->value_or(true);
-        config.git.commit_template = git->get("commit_template")->value_or(
-            std::string("hyprsync: update from $hostname")
-        );
-    } else {
-        config.git.repo = expand_path("~/.local/share/hyprsync");
-    }
+    std::string repo_str = tbl["git"]["repo"].value_or(std::string("~/.local/share/hyprsync"));
+    config.git.repo = expand_path(repo_str);
+    config.git.auto_commit = tbl["git"]["auto_commit"].value_or(true);
+    config.git.commit_template = tbl["git"]["commit_template"].value_or(
+        std::string("hyprsync: update from $hostname")
+    );
 
-    if (auto ssh = tbl["ssh"].as_table()) {
-        std::string key_str = ssh->get("key")->value_or(
-            std::string("~/.ssh/id_ed25519")
-        );
-        config.ssh.key = expand_path(key_str);
-        config.ssh.port = ssh->get("port")->value_or(22);
-        config.ssh.timeout = ssh->get("timeout")->value_or(10);
-    } else {
-        config.ssh.key = expand_path("~/.ssh/id_ed25519");
-    }
+    std::string ssh_key_str = tbl["ssh"]["key"].value_or(std::string("~/.ssh/id_ed25519"));
+    config.ssh.key = expand_path(ssh_key_str);
+    config.ssh.port = tbl["ssh"]["port"].value_or(22);
+    config.ssh.timeout = tbl["ssh"]["timeout"].value_or(10);
 
     if (auto devices = tbl["device"].as_array()) {
         for (const auto& dev : *devices) {
             if (auto dev_tbl = dev.as_table()) {
                 Device device;
-                device.name = dev_tbl->get("name")->value_or(std::string(""));
-                device.host = dev_tbl->get("host")->value_or(std::string(""));
-                device.user = dev_tbl->get("user")->value_or(std::string(""));
-                device.port = dev_tbl->get("port")->value_or(config.ssh.port);
+                device.name = (*dev_tbl)["name"].value_or(std::string(""));
+                device.host = (*dev_tbl)["host"].value_or(std::string(""));
+                device.user = (*dev_tbl)["user"].value_or(std::string(""));
+                device.port = (*dev_tbl)["port"].value_or(config.ssh.port);
 
-                std::string key_str = dev_tbl->get("key")->value_or(std::string(""));
+                std::string key_str = (*dev_tbl)["key"].value_or(std::string(""));
                 if (!key_str.empty()) {
                     device.key = expand_path(key_str).string();
                 }
@@ -116,9 +102,9 @@ Config load_config(const std::filesystem::path& path) {
         for (const auto& sync : *syncs) {
             if (auto sync_tbl = sync.as_table()) {
                 SyncGroup group;
-                group.name = sync_tbl->get("name")->value_or(std::string(""));
+                group.name = (*sync_tbl)["name"].value_or(std::string(""));
 
-                if (auto paths = sync_tbl->get("paths")->as_array()) {
+                if (auto paths = (*sync_tbl)["paths"].as_array()) {
                     for (const auto& p : *paths) {
                         if (auto path_str = p.value<std::string>()) {
                             group.paths.push_back(expand_path(*path_str));
@@ -126,7 +112,7 @@ Config load_config(const std::filesystem::path& path) {
                     }
                 }
 
-                if (auto excludes = sync_tbl->get("exclude")->as_array()) {
+                if (auto excludes = (*sync_tbl)["exclude"].as_array()) {
                     for (const auto& e : *excludes) {
                         if (auto exc_str = e.value<std::string>()) {
                             group.exclude.push_back(*exc_str);
@@ -134,7 +120,7 @@ Config load_config(const std::filesystem::path& path) {
                     }
                 }
 
-                if (auto devs = sync_tbl->get("devices")->as_array()) {
+                if (auto devs = (*sync_tbl)["devices"].as_array()) {
                     for (const auto& d : *devs) {
                         if (auto dev_str = d.value<std::string>()) {
                             group.devices.push_back(*dev_str);
@@ -142,10 +128,7 @@ Config load_config(const std::filesystem::path& path) {
                     }
                 }
 
-                std::string remote = sync_tbl->get("remote_path")->value_or(std::string(""));
-                if (!remote.empty()) {
-                    group.remote_path = remote;
-                }
+                group.remote_path = (*sync_tbl)["remote_path"].value_or(std::string(""));
 
                 if (!group.name.empty() && !group.paths.empty()) {
                     config.sync_groups.push_back(group);
@@ -154,15 +137,13 @@ Config load_config(const std::filesystem::path& path) {
         }
     }
 
-    if (auto hooks = tbl["hooks"].as_table()) {
-        config.hooks.pre_sync = hooks->get("pre_sync")->value_or(std::string(""));
-        config.hooks.post_sync = hooks->get("post_sync")->value_or(std::string(""));
+    config.hooks.pre_sync = tbl["hooks"]["pre_sync"].value_or(std::string(""));
+    config.hooks.post_sync = tbl["hooks"]["post_sync"].value_or(std::string(""));
 
-        if (auto group_hooks = hooks->get("group")->as_table()) {
-            for (const auto& [key, value] : *group_hooks) {
-                if (auto hook_str = value.value<std::string>()) {
-                    config.hooks.group_hooks[std::string(key)] = *hook_str;
-                }
+    if (auto group_hooks = tbl["hooks"]["group"].as_table()) {
+        for (const auto& [key, value] : *group_hooks) {
+            if (auto hook_str = value.value<std::string>()) {
+                config.hooks.group_hooks[std::string(key)] = *hook_str;
             }
         }
     }
