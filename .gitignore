@@ -33,7 +33,7 @@ out/
 *.exe
 *.out
 *.app
-hyprsync
+/hyprsync
 
 # Prerequisites
 *.d
