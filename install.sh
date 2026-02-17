@@ -18,20 +18,66 @@ done
 echo "hyprsync installer"
 echo ""
 
-if ! command -v curl &> /dev/null; then
-    echo "error: curl is required but not installed"
-    exit 1
-fi
+detect_pkg_manager() {
+    if command -v pacman &> /dev/null; then
+        echo "pacman"
+    elif command -v apt-get &> /dev/null; then
+        echo "apt"
+    elif command -v dnf &> /dev/null; then
+        echo "dnf"
+    elif command -v zypper &> /dev/null; then
+        echo "zypper"
+    elif command -v brew &> /dev/null; then
+        echo "brew"
+    else
+        echo "unknown"
+    fi
+}
 
-if ! command -v git &> /dev/null; then
-    echo "error: git is required but not installed"
-    exit 1
-fi
+install_package() {
+    local pkg="$1"
+    local mgr=$(detect_pkg_manager)
 
-if ! command -v rsync &> /dev/null; then
-    echo "error: rsync is required but not installed"
-    exit 1
-fi
+    echo "installing $pkg..."
+
+    case $mgr in
+        pacman)
+            sudo pacman -S --noconfirm "$pkg"
+            ;;
+        apt)
+            sudo apt-get update -qq && sudo apt-get install -y "$pkg"
+            ;;
+        dnf)
+            sudo dnf install -y "$pkg"
+            ;;
+        zypper)
+            sudo zypper install -y "$pkg"
+            ;;
+        brew)
+            brew install "$pkg"
+            ;;
+        *)
+            echo "error: could not detect package manager"
+            echo "please install $pkg manually"
+            exit 1
+            ;;
+    esac
+}
+
+check_and_install() {
+    local cmd="$1"
+    local pkg="${2:-$1}"
+
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "$cmd not found"
+        install_package "$pkg"
+    fi
+}
+
+check_and_install curl
+check_and_install git
+check_and_install rsync
+check_and_install ssh openssh
 
 if [ "$DEV_MODE" = true ]; then
     echo "fetching development release..."
