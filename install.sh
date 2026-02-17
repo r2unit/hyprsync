@@ -4,6 +4,16 @@ set -e
 REPO="r2unit/hyprsync"
 INSTALL_DIR="$HOME/.local/bin"
 DATA_DIR="$HOME/.local/share/hyprsync"
+DEV_MODE=false
+
+for arg in "$@"; do
+    case $arg in
+        --dev)
+            DEV_MODE=true
+            shift
+            ;;
+    esac
+done
 
 echo "hyprsync installer"
 echo ""
@@ -23,15 +33,20 @@ if ! command -v rsync &> /dev/null; then
     exit 1
 fi
 
-echo "fetching latest release..."
-LATEST=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
+if [ "$DEV_MODE" = true ]; then
+    echo "fetching development release..."
+    LATEST="dev"
+else
+    echo "fetching latest release..."
+    LATEST=$(curl -s "https://api.github.com/repos/$REPO/releases/latest" | grep '"tag_name"' | sed -E 's/.*"([^"]+)".*/\1/')
 
-if [ -z "$LATEST" ]; then
-    echo "error: could not fetch latest release"
-    exit 1
+    if [ -z "$LATEST" ]; then
+        echo "error: could not fetch latest release"
+        exit 1
+    fi
 fi
 
-echo "latest version: $LATEST"
+echo "version: $LATEST"
 
 OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
