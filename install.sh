@@ -142,21 +142,52 @@ chmod +x "$INSTALL_DIR/hyprsync"
 mkdir -p "$DATA_DIR"
 echo "script" > "$DATA_DIR/.hyprsync-install-method"
 
+COMPLETIONS_URL="https://raw.githubusercontent.com/r2unit/hyprsync/devel/completions"
+
+install_completions() {
+    echo "installing shell completions..."
+
+    if [ -n "$BASH_VERSION" ] || [ -f "$HOME/.bashrc" ]; then
+        BASH_COMP_DIR="$HOME/.local/share/bash-completion/completions"
+        mkdir -p "$BASH_COMP_DIR"
+        curl -sL "$COMPLETIONS_URL/hyprsync.bash" -o "$BASH_COMP_DIR/hyprsync"
+
+        if ! grep -q "hyprsync" "$HOME/.bashrc" 2>/dev/null; then
+            echo "" >> "$HOME/.bashrc"
+            echo "# hyprsync completions" >> "$HOME/.bashrc"
+            echo "[ -f \"$BASH_COMP_DIR/hyprsync\" ] && source \"$BASH_COMP_DIR/hyprsync\"" >> "$HOME/.bashrc"
+        fi
+    fi
+
+    if [ -n "$ZSH_VERSION" ] || [ -f "$HOME/.zshrc" ]; then
+        ZSH_COMP_DIR="$HOME/.local/share/zsh/site-functions"
+        mkdir -p "$ZSH_COMP_DIR"
+        curl -sL "$COMPLETIONS_URL/hyprsync.zsh" -o "$ZSH_COMP_DIR/_hyprsync"
+
+        if ! grep -q "hyprsync" "$HOME/.zshrc" 2>/dev/null; then
+            echo "" >> "$HOME/.zshrc"
+            echo "# hyprsync completions" >> "$HOME/.zshrc"
+            echo "fpath=($ZSH_COMP_DIR \$fpath)" >> "$HOME/.zshrc"
+            echo "autoload -Uz compinit && compinit" >> "$HOME/.zshrc"
+        fi
+    fi
+}
+
+install_completions
+
 if [[ ":$PATH:" != *":$INSTALL_DIR:"* ]]; then
     echo ""
     echo "note: $INSTALL_DIR is not in your PATH"
     echo "add this to your shell config:"
     echo ""
-    if [ "$OS" = "darwin" ]; then
-        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-    else
-        echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
-    fi
+    echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
     echo ""
 fi
 
 echo ""
 echo "hyprsync $LATEST installed successfully"
+echo ""
+echo "restart your shell or run 'source ~/.bashrc' (or ~/.zshrc) for completions"
 echo ""
 echo "next steps:"
 echo "  hyprsync init      # interactive setup"
