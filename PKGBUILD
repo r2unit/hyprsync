@@ -15,8 +15,10 @@ sha256sums=('SKIP')
 build() {
     cd "$pkgname-$pkgver"
 
-    mkdir -p vendor
-    git clone --depth 1 https://github.com/cktan/tomlc99.git vendor/tomlc99
+    git clone --depth 1 https://github.com/cktan/tomlc17.git /tmp/tomlc17
+    mkdir -p vendor/tomlc17
+    cp /tmp/tomlc17/src/tomlc17.h /tmp/tomlc17/src/tomlc17.c /tmp/tomlc17/LICENSE vendor/tomlc17/
+    rm -rf /tmp/tomlc17
 
     cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
