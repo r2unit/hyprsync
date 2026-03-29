@@ -8,6 +8,7 @@
 #include <stdexcept>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <poll.h>
 #include <pwd.h>
 
 namespace hyprsync {
@@ -120,17 +121,39 @@ ExecResult exec(const std::string& command) {
     close(stderr_pipe[1]);
 
     std::array<char, 4096> buffer{};
-    ssize_t bytes_read;
 
-    while ((bytes_read = read(stdout_pipe[0], buffer.data(), buffer.size())) > 0) {
-        result.stdout_output.append(buffer.data(), bytes_read);
-    }
-    close(stdout_pipe[0]);
+    struct pollfd fds[2];
+    fds[0].fd = stdout_pipe[0];
+    fds[0].events = POLLIN;
+    fds[1].fd = stderr_pipe[0];
+    fds[1].events = POLLIN;
 
-    while ((bytes_read = read(stderr_pipe[0], buffer.data(), buffer.size())) > 0) {
-        result.stderr_output.append(buffer.data(), bytes_read);
+    int open_fds = 2;
+    while (open_fds > 0) {
+        int ret = poll(fds, 2, -1);
+        if (ret < 0) {
+            if (errno == EINTR) continue;
+            break;
+        }
+
+        for (int f = 0; f < 2; ++f) {
+            if (fds[f].fd < 0) continue;
+            if (fds[f].revents & (POLLIN | POLLHUP)) {
+                ssize_t bytes_read = read(fds[f].fd, buffer.data(), buffer.size());
+                if (bytes_read > 0) {
+                    if (f == 0) {
+                        result.stdout_output.append(buffer.data(), bytes_read);
+                    } else {
+                        result.stderr_output.append(buffer.data(), bytes_read);
+                    }
+                } else {
+                    close(fds[f].fd);
+                    fds[f].fd = -1;
+                    open_fds--;
+                }
+            }
+        }
     }
-    close(stderr_pipe[0]);
 
     int status;
     waitpid(pid, &status, 0);
@@ -173,14 +196,31 @@ ExecResult exec(const std::vector<std::string>& args) {
 
 ExecResult exec(const std::vector<std::string>& args,
                 const std::filesystem::path& working_dir) {
-    std::string current_dir = std::filesystem::current_path().string();
-    std::filesystem::current_path(working_dir);
+    if (args.empty()) {
+        return ExecResult{-1, "", "empty command"};
+    }
 
-    ExecResult result = exec(args);
+    std::ostringstream cmd;
+    cmd << "cd " << working_dir.string() << " && ";
+    for (size_t i = 0; i < args.size(); ++i) {
+        if (i > 0) cmd << ' ';
 
-    std::filesystem::current_path(current_dir);
+        bool needs_quoting = args[i].find_first_of(" \t\n\"'\\$`") != std::string::npos;
+        if (needs_quoting) {
+            cmd << '"';
+            for (char c : args[i]) {
+                if (c == '"' || c == '\\' || c == '$' || c == '`') {
+                    cmd << '\\';
+                }
+                cmd << c;
+            }
+            cmd << '"';
+        } else {
+            cmd << args[i];
+        }
+    }
 
-    return result;
+    return exec(cmd.str());
 }
 
 std::string trim(const std::string& str) {
