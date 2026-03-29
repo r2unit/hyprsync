@@ -16,8 +16,7 @@ build() {
     cd "$pkgname-$pkgver"
 
     mkdir -p vendor
-    git clone --depth 1 https://github.com/marzer/tomlplusplus.git vendor/tomlplusplus
-    git clone --depth 1 https://github.com/gabime/spdlog.git vendor/spdlog
+    git clone --depth 1 https://github.com/cktan/tomlc99.git vendor/tomlc99
 
     cmake -B build \
         -DCMAKE_BUILD_TYPE=Release \
