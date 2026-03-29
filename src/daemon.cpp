@@ -83,7 +83,13 @@ void Daemon::shutdown() {
 void Daemon::handle_changes(const std::vector<FileEvent>& events) {
     spdlog::debug("handling {} file events", events.size());
 
-    git_->snapshot(config_.sync_groups);
+    std::vector<std::filesystem::path> changed_paths;
+    changed_paths.reserve(events.size());
+    for (const auto& e : events) {
+        changed_paths.push_back(e.path);
+    }
+
+    git_->snapshot_changed(changed_paths, config_.sync_groups);
 
     if (!git_->has_changes()) {
         spdlog::debug("no actual changes after snapshot");

@@ -23,6 +23,8 @@ public:
     bool is_initialized() const;
 
     void snapshot(const std::vector<SyncGroup>& groups);
+    void snapshot_changed(const std::vector<std::filesystem::path>& changed_paths,
+                          const std::vector<SyncGroup>& groups);
     void restore(const std::vector<SyncGroup>& groups);
 
     bool commit(const std::string& message);

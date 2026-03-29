@@ -73,6 +73,36 @@ void GitManager::snapshot(const std::vector<SyncGroup>& groups) {
     git_exec({"add", "-A"});
 }
 
+// <lorenzo> incrementele snapshot: kopieert alleen gewijzigde bestanden ipv alles
+void GitManager::snapshot_changed(const std::vector<std::filesystem::path>& changed_paths,
+                                   const std::vector<SyncGroup>& groups) {
+    update_gitignore(groups);
+
+    for (const auto& changed : changed_paths) {
+        bool tracked = false;
+
+        for (const auto& group : groups) {
+            for (const auto& path : group.paths) {
+                auto expanded = expand_path(path);
+                std::string changed_str = changed.string();
+                std::string expanded_str = expanded.string();
+
+                if (changed_str.find(expanded_str) == 0) {
+                    tracked = true;
+                    break;
+                }
+            }
+            if (tracked) break;
+        }
+
+        if (tracked && (file_exists(changed) || dir_exists(changed))) {
+            copy_to_repo(changed);
+        }
+    }
+
+    git_exec({"add", "-A"});
+}
+
 void GitManager::restore(const std::vector<SyncGroup>& groups) {
     for (const auto& group : groups) {
         for (const auto& path : group.paths) {
