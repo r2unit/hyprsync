@@ -635,6 +635,7 @@ void Cli::print_usage() const {
     std::cout << "    hyprsync upgrade\n";
     std::cout << "    hyprsync upgrade 2026.2.1\n";
     std::cout << "\n";
+    std::cout << "made with \xF0\x9F\xA7\x80 by r2unit\n";
 }
 
 }
