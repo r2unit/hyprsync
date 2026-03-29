@@ -736,13 +736,5 @@ static void print_usage(void) {
     printf("    -d, --device <name>   only sync with a specific device\n");
     printf("    -h, --help            show this help\n");
     printf("\n");
-    printf("examples:\n");
-    printf("    hyprsync init\n");
-    printf("    hyprsync sync --dry-run\n");
-    printf("    hyprsync sync -g hyprland -d desktop\n");
-    printf("    hyprsync upgrade\n");
-    printf("    hyprsync upgrade --devel\n");
-    printf("    hyprsync upgrade 2026.2.1\n");
-    printf("\n");
     printf("made with \xF0\x9F\xA7\x80 by r2unit\n");
 }
