@@ -78,3 +78,6 @@ Testing/
 *.log
 *.tmp
 *.bak
+
+# Clangd cache
+.cache/

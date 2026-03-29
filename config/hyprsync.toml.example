@@ -1,0 +1,113 @@
+# HyprSync Configuration
+# Copy this file to ~/.config/hypr/hyprsync.toml and customize
+
+[general]
+# Unique name for this machine
+hostname = "laptop"
+
+# Sync mode: "push", "pull", or "bidirectional"
+mode = "bidirectional"
+
+# Conflict resolution: "newest_wins", "manual", or "keep_both"
+conflict_strategy = "newest_wins"
+
+# How often to check for changes in seconds (0 = inotify only, no polling)
+poll_interval = 0
+
+# Enable dry-run by default (show what would sync without doing it)
+dry_run = false
+
+# Log level: "debug", "info", "warn", "error"
+log_level = "info"
+
+[git]
+# Local git repository for tracking file versions
+repo = "~/.local/share/hyprsync"
+
+# Auto-commit changes before syncing
+auto_commit = true
+
+# Commit message template ($hostname is available)
+commit_template = "hyprsync: update from $hostname"
+
+[ssh]
+# Path to SSH private key (used for all connections)
+key = "~/.ssh/id_ed25519"
+
+# Default SSH port
+port = 22
+
+# Connection timeout in seconds
+timeout = 10
+
+# ── Devices ──────────────────────────────────────────────
+
+[[device]]
+name = "desktop"
+host = "192.168.1.100"
+user = "lorenzo"
+port = 22
+# Optional: override SSH key for this device
+# key = "~/.ssh/id_desktop"
+
+[[device]]
+name = "server"
+host = "homelab.local"
+user = "lorenzo"
+port = 2222
+
+# ── Sync Paths ──────────────────────────────────────────
+
+[[sync]]
+name = "hyprland"
+paths = [
+    "~/.config/hypr/",
+    "~/.config/waybar/",
+    "~/.config/dunst/",
+]
+exclude = [
+    "*.log",
+    "*.bak",
+]
+# Which devices to sync this group with (empty = all devices)
+devices = []
+
+[[sync]]
+name = "shell"
+paths = [
+    "~/.zshrc",
+    "~/.config/zsh/",
+    "~/.config/starship.toml",
+]
+devices = []
+
+[[sync]]
+name = "editor"
+paths = [
+    "~/.config/nvim/",
+    "~/.config/kitty/",
+    "~/.gitconfig",
+    "~/.tmux.conf",
+]
+devices = []
+
+[[sync]]
+name = "scripts"
+paths = [
+    "~/.local/bin/",
+]
+exclude = [
+    "__pycache__/",
+    "*.pyc",
+]
+# Only sync to specific devices
+devices = ["desktop"]
+
+# ── Hooks ────────────────────────────────────────────────
+
+[hooks]
+pre_sync = ""
+post_sync = ""
+
+[hooks.group]
+hyprland = "hyprctl reload"

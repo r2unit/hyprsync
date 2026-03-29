@@ -1,0 +1,17 @@
+#ifndef HS_VERSION_H
+#define HS_VERSION_H
+
+#define HS_VERSION "@HYPRSYNC_VERSION@"
+#define HS_VERSION_YEAR @HYPRSYNC_VERSION_YEAR@
+#define HS_VERSION_MONTH @HYPRSYNC_VERSION_MONTH@
+#define HS_VERSION_NUMBER @HYPRSYNC_VERSION_NUMBER@
+
+#define HS_BUILD_DATE "@HYPRSYNC_BUILD_DATE@"
+#define HS_GIT_COMMIT "@HYPRSYNC_GIT_COMMIT@"
+
+#define HS_GITHUB_REPO "r2unit/hyprsync"
+#define HS_GITHUB_API_URL "https://api.github.com/repos/r2unit/hyprsync/releases"
+
+#define HS_INSTALL_MARKER_FILE ".hyprsync-install-method"
+
+#endif

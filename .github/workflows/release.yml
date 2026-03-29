@@ -1,0 +1,114 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate CalVer version
+        id: version
+        run: |
+          YEAR=$(date +%Y)
+          MONTH=$(date +%-m)
+          FIRST_OF_MONTH=$(date +%Y-%m-01)
+          COUNT=$(git rev-list --count --since="$FIRST_OF_MONTH" HEAD)
+          if [ "$COUNT" = "0" ]; then
+            COUNT=1
+          fi
+          VERSION="${YEAR}.${MONTH}.${COUNT}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Generated version: $VERSION"
+
+  build:
+    needs: version
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake git
+
+      - name: Build
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
+          cmake --build build -j$(nproc)
+
+      - name: Prepare release asset
+        run: |
+          cp build/hyprsync hyprsync-linux-amd64
+          chmod +x hyprsync-linux-amd64
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hyprsync-linux-amd64
+          path: hyprsync-linux-amd64
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          cp artifacts/hyprsync-linux-amd64/hyprsync-linux-amd64 release/
+          chmod +x release/*
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ needs.version.outputs.version }}
+          name: HyprSync v${{ needs.version.outputs.version }}
+          body: |
+            ## HyprSync v${{ needs.version.outputs.version }}
+            
+            ### Downloads
+            | Platform | Architecture | File |
+            |----------|--------------|------|
+            | Linux | x86_64 (Intel/AMD) | `hyprsync-linux-amd64` |
+            
+            ### Install (Linux)
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/r2unit/hyprsync/main/install.sh | bash
+            ```
+            
+            ### Upgrade
+            ```bash
+            hyprsync upgrade
+            ```
+          files: |
+            release/hyprsync-linux-amd64
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
