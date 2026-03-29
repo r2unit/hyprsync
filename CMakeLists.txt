@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(hyprsync LANGUAGES C)
 
-set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -52,13 +52,13 @@ set(SOURCES
     src/util.c
     src/tui.c
     src/upgrade.c
-    vendor/tomlc99/toml.c
+    vendor/tomlc17/tomlc17.c
 )
 
 add_executable(hyprsync ${SOURCES})
 
 target_include_directories(hyprsync PRIVATE
-    ${CMAKE_SOURCE_DIR}/vendor/tomlc99
+    ${CMAKE_SOURCE_DIR}/vendor/tomlc17
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
 )

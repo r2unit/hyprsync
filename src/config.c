@@ -6,7 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
-#include <toml.h>
+#include <tomlc17.h>
 
 const char *hs_sync_mode_to_string(hs_sync_mode mode) {
     switch (mode) {
@@ -38,21 +38,21 @@ hs_conflict_strategy hs_conflict_strategy_from_string(const char *str) {
     return HS_CONFLICT_NEWEST_WINS;
 }
 
-static char *toml_string_or(toml_table_t *tbl, const char *key, const char *def) {
-    toml_datum_t d = toml_string_in(tbl, key);
-    if (d.ok) return d.u.s;
+static char *get_string_or(toml_datum_t tbl, const char *key, const char *def) {
+    toml_datum_t d = toml_get(tbl, key);
+    if (d.type == TOML_STRING) return strdup(d.u.s);
     return strdup(def);
 }
 
-static int64_t toml_int_or(toml_table_t *tbl, const char *key, int64_t def) {
-    toml_datum_t d = toml_int_in(tbl, key);
-    if (d.ok) return d.u.i;
+static int64_t get_int_or(toml_datum_t tbl, const char *key, int64_t def) {
+    toml_datum_t d = toml_get(tbl, key);
+    if (d.type == TOML_INT64) return d.u.int64;
     return def;
 }
 
-static int toml_bool_or(toml_table_t *tbl, const char *key, int def) {
-    toml_datum_t d = toml_bool_in(tbl, key);
-    if (d.ok) return d.u.b;
+static int get_bool_or(toml_datum_t tbl, const char *key, int def) {
+    toml_datum_t d = toml_get(tbl, key);
+    if (d.type == TOML_BOOLEAN) return d.u.boolean ? 1 : 0;
     return def;
 }
 
@@ -67,54 +67,47 @@ hs_config hs_load_config(const char *path) {
         return config;
     }
 
-    FILE *fp = fopen(expanded, "r");
-    if (!fp) {
-        hs_error("failed to open config file: %s", expanded);
-        free(expanded);
-        return config;
-    }
-
-    char errbuf[256];
-    toml_table_t *root = toml_parse_file(fp, errbuf, sizeof(errbuf));
-    fclose(fp);
+    toml_result_t result = toml_parse_file_ex(expanded);
     free(expanded);
 
-    if (!root) {
-        hs_error("failed to parse config: %s", errbuf);
+    if (!result.ok) {
+        hs_error("failed to parse config: %s", result.errmsg);
         return config;
     }
 
-    toml_table_t *general = toml_table_in(root, "general");
-    if (general) {
-        toml_datum_t hostname_d = toml_string_in(general, "hostname");
-        if (hostname_d.ok)
-            config.hostname = hostname_d.u.s;
+    toml_datum_t root = result.toptab;
+
+    toml_datum_t general = toml_get(root, "general");
+    if (general.type == TOML_TABLE) {
+        toml_datum_t hostname_d = toml_get(general, "hostname");
+        if (hostname_d.type == TOML_STRING)
+            config.hostname = strdup(hostname_d.u.s);
         else
             config.hostname = hs_get_hostname();
 
-        char *mode_str = toml_string_or(general, "mode", "bidirectional");
+        char *mode_str = get_string_or(general, "mode", "bidirectional");
         config.mode = hs_sync_mode_from_string(mode_str);
         free(mode_str);
 
-        char *cs_str = toml_string_or(general, "conflict_strategy", "newest_wins");
+        char *cs_str = get_string_or(general, "conflict_strategy", "newest_wins");
         config.conflict_strategy = hs_conflict_strategy_from_string(cs_str);
         free(cs_str);
 
-        config.poll_interval = (int)toml_int_or(general, "poll_interval", 0);
-        config.dry_run = toml_bool_or(general, "dry_run", 0);
-        config.log_level = toml_string_or(general, "log_level", "info");
+        config.poll_interval = (int)get_int_or(general, "poll_interval", 0);
+        config.dry_run = get_bool_or(general, "dry_run", 0);
+        config.log_level = get_string_or(general, "log_level", "info");
     } else {
         config.hostname = hs_get_hostname();
         config.log_level = strdup("info");
     }
 
-    toml_table_t *git = toml_table_in(root, "git");
-    if (git) {
-        char *repo_str = toml_string_or(git, "repo", "~/.local/share/hyprsync");
+    toml_datum_t git = toml_get(root, "git");
+    if (git.type == TOML_TABLE) {
+        char *repo_str = get_string_or(git, "repo", "~/.local/share/hyprsync");
         config.git.repo = hs_expand_path(repo_str);
         free(repo_str);
-        config.git.auto_commit = toml_bool_or(git, "auto_commit", 1);
-        config.git.commit_template = toml_string_or(git, "commit_template",
+        config.git.auto_commit = get_bool_or(git, "auto_commit", 1);
+        config.git.commit_template = get_string_or(git, "commit_template",
                                                      "hyprsync: update from $hostname");
     } else {
         config.git.repo = hs_expand_path("~/.local/share/hyprsync");
@@ -122,13 +115,13 @@ hs_config hs_load_config(const char *path) {
         config.git.commit_template = strdup("hyprsync: update from $hostname");
     }
 
-    toml_table_t *ssh = toml_table_in(root, "ssh");
-    if (ssh) {
-        char *key_str = toml_string_or(ssh, "key", "~/.ssh/id_ed25519");
+    toml_datum_t ssh = toml_get(root, "ssh");
+    if (ssh.type == TOML_TABLE) {
+        char *key_str = get_string_or(ssh, "key", "~/.ssh/id_ed25519");
         config.ssh.key = hs_expand_path(key_str);
         free(key_str);
-        config.ssh.port = (int)toml_int_or(ssh, "port", 22);
-        config.ssh.timeout = (int)toml_int_or(ssh, "timeout", 10);
+        config.ssh.port = (int)get_int_or(ssh, "port", 22);
+        config.ssh.timeout = (int)get_int_or(ssh, "timeout", 10);
     } else {
         config.ssh.key = hs_expand_path("~/.ssh/id_ed25519");
         config.ssh.port = 22;
@@ -136,28 +129,25 @@ hs_config hs_load_config(const char *path) {
     }
 
     hs_vec_init(&config.devices);
-    toml_array_t *devices = toml_array_in(root, "device");
-    if (devices) {
-        int ndev = toml_array_nelem(devices);
-        for (int i = 0; i < ndev; i++) {
-            toml_table_t *dev_tbl = toml_table_at(devices, i);
-            if (!dev_tbl) continue;
+    toml_datum_t devices = toml_get(root, "device");
+    if (devices.type == TOML_ARRAY) {
+        for (int i = 0; i < devices.u.arr.size; i++) {
+            toml_datum_t dev_tbl = devices.u.arr.elem[i];
+            if (dev_tbl.type != TOML_TABLE) continue;
 
             hs_device device;
             memset(&device, 0, sizeof(device));
 
-            device.name = toml_string_or(dev_tbl, "name", "");
-            device.host = toml_string_or(dev_tbl, "host", "");
-            device.user = toml_string_or(dev_tbl, "user", "");
-            device.port = (int)toml_int_or(dev_tbl, "port", config.ssh.port);
+            device.name = get_string_or(dev_tbl, "name", "");
+            device.host = get_string_or(dev_tbl, "host", "");
+            device.user = get_string_or(dev_tbl, "user", "");
+            device.port = (int)get_int_or(dev_tbl, "port", config.ssh.port);
 
-            toml_datum_t key_d = toml_string_in(dev_tbl, "key");
-            if (key_d.ok && key_d.u.s[0] != '\0') {
+            toml_datum_t key_d = toml_get(dev_tbl, "key");
+            if (key_d.type == TOML_STRING && key_d.u.s[0] != '\0') {
                 device.key = hs_expand_path(key_d.u.s);
-                free(key_d.u.s);
             } else {
                 device.key = strdup("");
-                if (key_d.ok) free(key_d.u.s);
             }
 
             if (device.name[0] != '\0' && device.host[0] != '\0') {
@@ -169,54 +159,49 @@ hs_config hs_load_config(const char *path) {
     }
 
     hs_vec_init(&config.sync_groups);
-    toml_array_t *syncs = toml_array_in(root, "sync");
-    if (syncs) {
-        int nsync = toml_array_nelem(syncs);
-        for (int i = 0; i < nsync; i++) {
-            toml_table_t *sync_tbl = toml_table_at(syncs, i);
-            if (!sync_tbl) continue;
+    toml_datum_t syncs = toml_get(root, "sync");
+    if (syncs.type == TOML_ARRAY) {
+        for (int i = 0; i < syncs.u.arr.size; i++) {
+            toml_datum_t sync_tbl = syncs.u.arr.elem[i];
+            if (sync_tbl.type != TOML_TABLE) continue;
 
             hs_sync_group group;
             memset(&group, 0, sizeof(group));
-            group.name = toml_string_or(sync_tbl, "name", "");
+            group.name = get_string_or(sync_tbl, "name", "");
             hs_vec_init(&group.paths);
             hs_vec_init(&group.exclude);
             hs_vec_init(&group.devices);
 
-            toml_array_t *paths = toml_array_in(sync_tbl, "paths");
-            if (paths) {
-                int np = toml_array_nelem(paths);
-                for (int j = 0; j < np; j++) {
-                    toml_datum_t s = toml_string_at(paths, j);
-                    if (s.ok) {
+            toml_datum_t paths = toml_get(sync_tbl, "paths");
+            if (paths.type == TOML_ARRAY) {
+                for (int j = 0; j < paths.u.arr.size; j++) {
+                    toml_datum_t s = paths.u.arr.elem[j];
+                    if (s.type == TOML_STRING) {
                         char *exp = hs_expand_path(s.u.s);
-                        free(s.u.s);
                         hs_vec_push(&group.paths, exp);
                     }
                 }
             }
 
-            toml_array_t *excludes = toml_array_in(sync_tbl, "exclude");
-            if (excludes) {
-                int ne = toml_array_nelem(excludes);
-                for (int j = 0; j < ne; j++) {
-                    toml_datum_t s = toml_string_at(excludes, j);
-                    if (s.ok)
-                        hs_vec_push(&group.exclude, s.u.s);
+            toml_datum_t excludes = toml_get(sync_tbl, "exclude");
+            if (excludes.type == TOML_ARRAY) {
+                for (int j = 0; j < excludes.u.arr.size; j++) {
+                    toml_datum_t s = excludes.u.arr.elem[j];
+                    if (s.type == TOML_STRING)
+                        hs_vec_push(&group.exclude, strdup(s.u.s));
                 }
             }
 
-            toml_array_t *devs = toml_array_in(sync_tbl, "devices");
-            if (devs) {
-                int nd = toml_array_nelem(devs);
-                for (int j = 0; j < nd; j++) {
-                    toml_datum_t s = toml_string_at(devs, j);
-                    if (s.ok)
-                        hs_vec_push(&group.devices, s.u.s);
+            toml_datum_t devs = toml_get(sync_tbl, "devices");
+            if (devs.type == TOML_ARRAY) {
+                for (int j = 0; j < devs.u.arr.size; j++) {
+                    toml_datum_t s = devs.u.arr.elem[j];
+                    if (s.type == TOML_STRING)
+                        hs_vec_push(&group.devices, strdup(s.u.s));
                 }
             }
 
-            group.remote_path = toml_string_or(sync_tbl, "remote_path", "");
+            group.remote_path = get_string_or(sync_tbl, "remote_path", "");
 
             if (group.name[0] != '\0' && group.paths.len > 0) {
                 hs_vec_push(&config.sync_groups, group);
@@ -230,36 +215,34 @@ hs_config hs_load_config(const char *path) {
     config.hooks.post_sync = strdup("");
     hs_vec_init(&config.hooks.group_hooks);
 
-    toml_table_t *hooks = toml_table_in(root, "hooks");
-    if (hooks) {
-        toml_datum_t pre = toml_string_in(hooks, "pre_sync");
-        if (pre.ok) {
+    toml_datum_t hooks = toml_get(root, "hooks");
+    if (hooks.type == TOML_TABLE) {
+        toml_datum_t pre = toml_get(hooks, "pre_sync");
+        if (pre.type == TOML_STRING) {
             free(config.hooks.pre_sync);
-            config.hooks.pre_sync = pre.u.s;
+            config.hooks.pre_sync = strdup(pre.u.s);
         }
-        toml_datum_t post = toml_string_in(hooks, "post_sync");
-        if (post.ok) {
+        toml_datum_t post = toml_get(hooks, "post_sync");
+        if (post.type == TOML_STRING) {
             free(config.hooks.post_sync);
-            config.hooks.post_sync = post.u.s;
+            config.hooks.post_sync = strdup(post.u.s);
         }
 
-        toml_table_t *group_hooks = toml_table_in(hooks, "group");
-        if (group_hooks) {
-            for (int i = 0; ; i++) {
-                const char *key = toml_key_in(group_hooks, i);
-                if (!key) break;
-                toml_datum_t val = toml_string_in(group_hooks, key);
-                if (val.ok) {
+        toml_datum_t group_hooks = toml_get(hooks, "group");
+        if (group_hooks.type == TOML_TABLE) {
+            for (int i = 0; i < group_hooks.u.tab.size; i++) {
+                toml_datum_t val = group_hooks.u.tab.value[i];
+                if (val.type == TOML_STRING) {
                     hs_hook_entry entry;
-                    entry.key = strdup(key);
-                    entry.value = val.u.s;
+                    entry.key = strdup(group_hooks.u.tab.key[i]);
+                    entry.value = strdup(val.u.s);
                     hs_vec_push(&config.hooks.group_hooks, entry);
                 }
             }
         }
     }
 
-    toml_free(root);
+    toml_free(result);
     return config;
 }
 

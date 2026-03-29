@@ -1,6 +1,6 @@
 set(COMMON_INCLUDES
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/vendor/tomlc99
+    ${CMAKE_SOURCE_DIR}/vendor/tomlc17
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_BINARY_DIR}/include
 )
@@ -8,7 +8,7 @@ set(COMMON_INCLUDES
 set(BASE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/util.c
     ${CMAKE_SOURCE_DIR}/src/config.c
-    ${CMAKE_SOURCE_DIR}/vendor/tomlc99/toml.c
+    ${CMAKE_SOURCE_DIR}/vendor/tomlc17/tomlc17.c
 )
 
 add_executable(test_config
