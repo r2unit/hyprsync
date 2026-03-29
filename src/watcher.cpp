@@ -79,6 +79,7 @@ std::vector<FileEvent> Watcher::poll_changes(std::chrono::milliseconds timeout) 
 
     std::vector<FileEvent> events;
     std::swap(events, pending_events_);
+    seen_paths_.clear();
 
     return events;
 }
@@ -119,6 +120,24 @@ void Watcher::remove_watch(int wd) {
     if (it != watch_descriptors_.end()) {
         watch_descriptors_.erase(it);
     }
+}
+
+void Watcher::rescan() {
+    for (const auto& [wd, _] : watch_descriptors_) {
+        inotify_rm_watch(inotify_fd_, wd);
+    }
+    watch_descriptors_.clear();
+
+    for (const auto& group : config_.sync_groups) {
+        for (const auto& path : group.paths) {
+            auto expanded = expand_path(path);
+            if (dir_exists(expanded) || file_exists(expanded)) {
+                add_watch_recursive(expanded);
+            }
+        }
+    }
+
+    spdlog::info("rescan complete, {} watches active", watch_descriptors_.size());
 }
 
 void Watcher::watch_loop() {
@@ -166,6 +185,18 @@ void Watcher::watch_loop() {
 
             if (event->mask & IN_Q_OVERFLOW) {
                 spdlog::warn("inotify queue overflow, triggering full rescan");
+                rescan();
+
+                FileEvent overflow_event;
+                overflow_event.type = FileEventType::Modified;
+                overflow_event.path = "/";
+                overflow_event.timestamp = std::chrono::steady_clock::now();
+
+                std::lock_guard<std::mutex> lock(queue_mutex_);
+                pending_events_.clear();
+                seen_paths_.clear();
+                pending_events_.push_back(overflow_event);
+                queue_cv_.notify_one();
             } else {
                 const char* name = event->len > 0 ? event->name : "";
                 process_event(event->wd, event->mask, name);
@@ -222,6 +253,12 @@ void Watcher::process_event(int wd, uint32_t mask, const char* name) {
     }
 
     std::lock_guard<std::mutex> lock(queue_mutex_);
+
+    std::string path_str = path.string();
+    if (seen_paths_.count(path_str)) {
+        return;
+    }
+    seen_paths_.insert(path_str);
     pending_events_.push_back(event);
 }
 

@@ -7,6 +7,7 @@
 #include <condition_variable>
 #include <filesystem>
 #include <mutex>
+#include <set>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -43,11 +44,13 @@ private:
     std::mutex queue_mutex_;
     std::condition_variable queue_cv_;
     std::vector<FileEvent> pending_events_;
+    std::set<std::string> seen_paths_;
     std::atomic<bool> running_{false};
     std::thread watch_thread_;
 
     void add_watch_recursive(const std::filesystem::path& path);
     void remove_watch(int wd);
+    void rescan();
     void watch_loop();
     void process_event(int wd, uint32_t mask, const char* name);
 };

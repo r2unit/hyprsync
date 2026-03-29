@@ -83,13 +83,24 @@ void Daemon::shutdown() {
 void Daemon::handle_changes(const std::vector<FileEvent>& events) {
     spdlog::debug("handling {} file events", events.size());
 
+    bool needs_full_snapshot = false;
     std::vector<std::filesystem::path> changed_paths;
     changed_paths.reserve(events.size());
+
     for (const auto& e : events) {
+        if (e.path == "/") {
+            needs_full_snapshot = true;
+            break;
+        }
         changed_paths.push_back(e.path);
     }
 
-    git_->snapshot_changed(changed_paths, config_.sync_groups);
+    if (needs_full_snapshot) {
+        spdlog::info("running full snapshot after overflow");
+        git_->snapshot(config_.sync_groups);
+    } else {
+        git_->snapshot_changed(changed_paths, config_.sync_groups);
+    }
 
     if (!git_->has_changes()) {
         spdlog::debug("no actual changes after snapshot");
