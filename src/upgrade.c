@@ -53,27 +53,18 @@ hs_version hs_current_version(void) {
 }
 
 char *hs_get_binary_path(void) {
-    hs_strvec args;
-    hs_vec_init(&args);
-    hs_vec_push(&args, strdup("readlink"));
-    hs_vec_push(&args, strdup("-f"));
-    hs_vec_push(&args, strdup("/proc/self/exe"));
-
-    hs_exec_result res = hs_exec_args(&args);
-    hs_strvec_free(&args);
-
-    if (hs_exec_success(&res)) {
-        char *path = hs_trim(res.stdout_output);
-        hs_exec_result_free(&res);
-        return path;
+    char buf[4096];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len > 0) {
+        buf[len] = '\0';
+        return strdup(buf);
     }
-    hs_exec_result_free(&res);
 
+    hs_strvec args;
     hs_vec_init(&args);
     hs_vec_push(&args, strdup("which"));
     hs_vec_push(&args, strdup("hyprsync"));
-
-    res = hs_exec_args(&args);
+    hs_exec_result res = hs_exec_args(&args);
     hs_strvec_free(&args);
 
     if (hs_exec_success(&res)) {
@@ -346,7 +337,9 @@ static hs_releasevec parse_releases_json(const char *json) {
             if (assets_pos) {
                 const char *url_pos = strstr(assets_pos, "browser_download_url");
                 while (url_pos && (size_t)(url_pos - block) < block_len) {
-                    const char *url_start = strchr(url_pos + 20, '"');
+                    const char *colon = strchr(url_pos, ':');
+                    if (!colon || (size_t)(colon - block) >= block_len) break;
+                    const char *url_start = strchr(colon, '"');
                     if (!url_start || (size_t)(url_start - block) >= block_len) break;
                     url_start++;
                     const char *url_end = strchr(url_start, '"');
