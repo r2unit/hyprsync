@@ -276,6 +276,23 @@ static int release_cmp_desc(const void *a, const void *b) {
     return hs_version_cmp(rb->version, ra->version);
 }
 
+// <lorenzo> zoekt bijpassende sluit-accolade met brace-depth tellen
+static const char *find_matching_brace(const char *start, const char *end) {
+    int depth = 0;
+    for (const char *p = start; p < end; p++) {
+        if (*p == '{') depth++;
+        else if (*p == '}') { depth--; if (depth == 0) return p; }
+        else if (*p == '"') {
+            p++;
+            while (p < end && *p != '"') {
+                if (*p == '\\') p++;
+                p++;
+            }
+        }
+    }
+    return NULL;
+}
+
 static hs_releasevec parse_releases_json(const char *json) {
     hs_releasevec releases;
     hs_vec_init(&releases);
@@ -283,6 +300,7 @@ static hs_releasevec parse_releases_json(const char *json) {
     if (!json) return releases;
 
     size_t json_len = strlen(json);
+    const char *json_end = json + json_len;
     const char *pos = json;
 
     while ((pos = strstr(pos, "\"tag_name\"")) != NULL) {
@@ -290,7 +308,7 @@ static hs_releasevec parse_releases_json(const char *json) {
         while (block_start > json && *block_start != '{') block_start--;
         if (*block_start != '{') { pos++; continue; }
 
-        const char *block_end = strchr(pos, '}');
+        const char *block_end = find_matching_brace(block_start, json_end);
         if (!block_end) { pos++; continue; }
 
         size_t block_len = (size_t)(block_end - block_start + 1);
@@ -309,35 +327,32 @@ static hs_releasevec parse_releases_json(const char *json) {
         release.prerelease = extract_json_bool(block, block_len, "prerelease");
         release.download_url = strdup("");
 
-        free(block);
-
         hs_version v;
         if (hs_version_parse(release.tag_name, &v)) {
             release.version = v;
 
-            const char *assets_pos = strstr(block_start, "\"assets\"");
-            if (assets_pos && (size_t)(assets_pos - json) < (size_t)(block_end - json) + 500 &&
-                (size_t)(assets_pos - json) < json_len) {
+            const char *assets_pos = strstr(block, "\"assets\"");
+            if (assets_pos) {
                 const char *url_pos = strstr(assets_pos, "browser_download_url");
-                if (url_pos && (size_t)(url_pos - json) < json_len) {
+                while (url_pos && (size_t)(url_pos - block) < block_len) {
                     const char *url_start = strchr(url_pos + 20, '"');
-                    if (url_start && (size_t)(url_start - json) < json_len) {
-                        url_start++;
-                        const char *url_end = strchr(url_start, '"');
-                        if (url_end && (size_t)(url_end - json) < json_len) {
-                            size_t url_len = (size_t)(url_end - url_start);
-                            char *url = malloc(url_len + 1);
-                            memcpy(url, url_start, url_len);
-                            url[url_len] = '\0';
+                    if (!url_start || (size_t)(url_start - block) >= block_len) break;
+                    url_start++;
+                    const char *url_end = strchr(url_start, '"');
+                    if (!url_end || (size_t)(url_end - block) >= block_len) break;
 
-                            if (strstr(url, "linux") != NULL) {
-                                free(release.download_url);
-                                release.download_url = url;
-                            } else {
-                                free(url);
-                            }
-                        }
+                    size_t url_len = (size_t)(url_end - url_start);
+                    char *url = malloc(url_len + 1);
+                    memcpy(url, url_start, url_len);
+                    url[url_len] = '\0';
+
+                    if (strstr(url, "linux") != NULL) {
+                        free(release.download_url);
+                        release.download_url = url;
+                        break;
                     }
+                    free(url);
+                    url_pos = strstr(url_end, "browser_download_url");
                 }
             }
 
@@ -346,7 +361,8 @@ static hs_releasevec parse_releases_json(const char *json) {
             hs_release_free(&release);
         }
 
-        pos = block_end;
+        free(block);
+        pos = block_end + 1;
     }
 
     if (releases.len > 1) {
