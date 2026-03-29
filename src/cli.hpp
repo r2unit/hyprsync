@@ -14,6 +14,7 @@ struct CliOptions {
     bool dry_run = false;
     bool verbose = false;
     bool quiet = false;
+    bool devel = false;
     std::string group;
     std::string device;
     std::vector<std::string> args;

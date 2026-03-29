@@ -47,6 +47,8 @@ public:
 
     std::optional<Release> get_latest_release() const;
 
+    std::optional<Release> get_latest_dev_release() const;
+
     std::optional<Release> get_release(const std::string& version) const;
 
     bool has_update() const;
@@ -56,6 +58,8 @@ public:
     bool upgrade(const Release& release);
 
     bool upgrade_to_latest();
+
+    bool upgrade_to_latest_dev();
 
     bool upgrade_to_version(const std::string& version);
 

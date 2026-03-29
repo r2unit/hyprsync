@@ -92,6 +92,20 @@ TEST(CliTest, ParseUpgradeVersion) {
     SUCCEED();
 }
 
+TEST(CliTest, ParseUpgradeDevel) {
+    const char* argv[] = {"hyprsync", "upgrade", "--devel"};
+    hyprsync::Cli cli(3, const_cast<char**>(argv));
+
+    SUCCEED();
+}
+
+TEST(CliTest, ParseUpgradeCheckDevel) {
+    const char* argv[] = {"hyprsync", "upgrade", "check", "--devel"};
+    hyprsync::Cli cli(4, const_cast<char**>(argv));
+
+    SUCCEED();
+}
+
 TEST(CliTest, ParseConflictsResolve) {
     const char* argv[] = {"hyprsync", "conflicts", "resolve"};
     hyprsync::Cli cli(3, const_cast<char**>(argv));

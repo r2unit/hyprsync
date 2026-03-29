@@ -249,6 +249,18 @@ std::optional<Release> Upgrader::get_latest_release() const {
     return std::nullopt;
 }
 
+std::optional<Release> Upgrader::get_latest_dev_release() const {
+    auto releases = fetch_releases();
+
+    for (const auto& release : releases) {
+        if (release.prerelease) {
+            return release;
+        }
+    }
+
+    return std::nullopt;
+}
+
 std::optional<Release> Upgrader::get_release(const std::string& version) const {
     auto releases = fetch_releases();
     auto target = Version::parse(version);
@@ -421,6 +433,36 @@ bool Upgrader::upgrade_to_latest() {
     std::cout << "  latest:  " << latest->version.to_string() << "\n\n";
 
     return upgrade(latest.value());
+}
+
+bool Upgrader::upgrade_to_latest_dev() {
+    std::cout << "checking for development builds...\n\n";
+
+    auto releases = fetch_releases();
+    if (releases.empty()) {
+        std::cerr << "error: could not fetch releases from GitHub\n";
+        std::cerr << "check your internet connection and try again\n";
+        return false;
+    }
+
+    std::optional<Release> latest_dev;
+    for (const auto& release : releases) {
+        if (release.prerelease) {
+            latest_dev = release;
+            break;
+        }
+    }
+
+    if (!latest_dev.has_value()) {
+        std::cout << "no development builds available\n";
+        return true;
+    }
+
+    auto current = current_version();
+    std::cout << "latest dev build: " << latest_dev->tag_name << "\n";
+    std::cout << "current version:  " << current.to_string() << "\n\n";
+
+    return upgrade(latest_dev.value());
 }
 
 bool Upgrader::upgrade_to_version(const std::string& version) {

@@ -33,6 +33,8 @@ void Cli::parse_args(int argc, char* argv[]) {
             options_.verbose = true;
         } else if (arg == "-q" || arg == "--quiet") {
             options_.quiet = true;
+        } else if (arg == "--devel") {
+            options_.devel = true;
         } else if (arg == "-g" || arg == "--group") {
             if (i + 1 < argc) {
                 options_.group = argv[++i];
@@ -552,6 +554,10 @@ int Cli::cmd_restore() {
 int Cli::cmd_upgrade() {
     Upgrader upgrader;
 
+    if (options_.devel && options_.args.empty()) {
+        return upgrader.upgrade_to_latest_dev() ? 0 : 1;
+    }
+
     if (options_.args.empty()) {
         return upgrader.upgrade_to_latest() ? 0 : 1;
     }
@@ -564,6 +570,20 @@ int Cli::cmd_upgrade() {
     }
 
     if (arg == "check" || arg == "--check") {
+        if (options_.devel) {
+            auto latest = upgrader.get_latest_dev_release();
+            if (!latest.has_value()) {
+                std::cout << "no development builds available\n";
+                return 0;
+            }
+
+            auto current = upgrader.current_version();
+            std::cout << "latest dev build: " << latest->tag_name << "\n";
+            std::cout << "current version:  " << current.to_string() << "\n";
+            std::cout << "\nrun 'hyprsync upgrade --devel' to install\n";
+            return 0;
+        }
+
         auto latest = upgrader.get_latest_release();
         if (!latest.has_value()) {
             std::cout << "no stable releases available yet\n";
@@ -615,6 +635,7 @@ void Cli::print_usage() const {
     std::cout << "    conflicts resolve resolve conflicts interactively\n";
     std::cout << "    conflicts resolve --auto  resolve using configured strategy\n";
     std::cout << "    upgrade [version] upgrade to latest or specific version\n";
+    std::cout << "    upgrade --devel   upgrade to latest development build\n";
     std::cout << "    upgrade list      list available versions\n";
     std::cout << "    upgrade check     check for updates\n";
     std::cout << "    version           show version info\n";
@@ -633,6 +654,7 @@ void Cli::print_usage() const {
     std::cout << "    hyprsync sync --dry-run\n";
     std::cout << "    hyprsync sync -g hyprland -d desktop\n";
     std::cout << "    hyprsync upgrade\n";
+    std::cout << "    hyprsync upgrade --devel\n";
     std::cout << "    hyprsync upgrade 2026.2.1\n";
     std::cout << "\n";
     std::cout << "made with \xF0\x9F\xA7\x80 by r2unit\n";
