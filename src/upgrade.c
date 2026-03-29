@@ -206,6 +206,10 @@ static char *fetch_github_api(const char *url) {
     hs_vec_push(&args, strdup("curl"));
     hs_vec_push(&args, strdup("-s"));
     hs_vec_push(&args, strdup("-L"));
+    hs_vec_push(&args, strdup("--connect-timeout"));
+    hs_vec_push(&args, strdup("10"));
+    hs_vec_push(&args, strdup("--max-time"));
+    hs_vec_push(&args, strdup("30"));
     hs_vec_push(&args, strdup("-H"));
     hs_vec_push(&args, strdup("Accept: application/vnd.github+json"));
     hs_vec_push(&args, strdup("-H"));
@@ -299,23 +303,30 @@ static hs_releasevec parse_releases_json(const char *json) {
 
     if (!json) return releases;
 
-    size_t json_len = strlen(json);
-    const char *json_end = json + json_len;
-    const char *pos = json;
+    const char *json_end = json + strlen(json);
+    const char *pos = strchr(json, '[');
+    if (!pos) return releases;
+    pos++;
 
-    while ((pos = strstr(pos, "\"tag_name\"")) != NULL) {
+    while (pos < json_end) {
+        while (pos < json_end && *pos != '{' && *pos != ']') pos++;
+        if (pos >= json_end || *pos == ']') break;
+
         const char *block_start = pos;
-        while (block_start > json && *block_start != '{') block_start--;
-        if (*block_start != '{') { pos++; continue; }
-
         const char *block_end = find_matching_brace(block_start, json_end);
-        if (!block_end) { pos++; continue; }
+        if (!block_end) break;
 
         size_t block_len = (size_t)(block_end - block_start + 1);
 
         char *block = malloc(block_len + 1);
         memcpy(block, block_start, block_len);
         block[block_len] = '\0';
+
+        if (!strstr(block, "\"tag_name\"")) {
+            free(block);
+            pos = block_end + 1;
+            continue;
+        }
 
         hs_release release;
         memset(&release, 0, sizeof(release));
@@ -466,6 +477,10 @@ static int download_file(const char *url, const char *dest) {
     hs_vec_push(&args, strdup("curl"));
     hs_vec_push(&args, strdup("-s"));
     hs_vec_push(&args, strdup("-L"));
+    hs_vec_push(&args, strdup("--connect-timeout"));
+    hs_vec_push(&args, strdup("10"));
+    hs_vec_push(&args, strdup("--max-time"));
+    hs_vec_push(&args, strdup("120"));
     hs_vec_push(&args, strdup("-o"));
     hs_vec_push(&args, strdup(dest));
     hs_vec_push(&args, strdup(url));
