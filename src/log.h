@@ -14,11 +14,9 @@ typedef enum {
     HS_LOG_OFF
 } hs_log_level;
 
-static hs_log_level hs_current_log_level = HS_LOG_INFO;
+extern hs_log_level hs_current_log_level;
 
-static inline void hs_log_set_level(hs_log_level level) {
-    hs_current_log_level = level;
-}
+void hs_log_set_level(hs_log_level level);
 
 static inline hs_log_level hs_log_level_from_string(const char *s) {
     if (!s) return HS_LOG_INFO;
