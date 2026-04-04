@@ -50,6 +50,7 @@ set(SOURCES
     src/setup.c
     src/cli.c
     src/util.c
+    src/log.c
     src/tui.c
     src/upgrade.c
     vendor/tomlc17/tomlc17.c

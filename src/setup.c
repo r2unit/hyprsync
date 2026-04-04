@@ -140,6 +140,8 @@ static int test_connection(const hs_device *device, const char *key) {
     hs_vec_push(&args, strdup("BatchMode=yes"));
     hs_vec_push(&args, strdup("-o"));
     hs_vec_push(&args, strdup("StrictHostKeyChecking=accept-new"));
+    hs_vec_push(&args, strdup("-o"));
+    hs_vec_push(&args, strdup("LogLevel=ERROR"));
     hs_vec_push(&args, userhost);
     hs_vec_push(&args, strdup("echo ok"));
 
@@ -149,8 +151,12 @@ static int test_connection(const hs_device *device, const char *key) {
     int ok = 0;
     if (hs_exec_success(&result)) {
         char *trimmed = hs_trim(result.stdout_output);
-        if (trimmed && strcmp(trimmed, "ok") == 0)
-            ok = 1;
+        if (trimmed) {
+            char *last_nl = strrchr(trimmed, '\n');
+            const char *last_line = last_nl ? last_nl + 1 : trimmed;
+            if (strcmp(last_line, "ok") == 0)
+                ok = 1;
+        }
         free(trimmed);
     }
     hs_exec_result_free(&result);
@@ -590,7 +596,7 @@ hs_config hs_setup_run(void) {
     prompt_ssh(tui, &ssh_key, &ssh_port);
     config.ssh.key = ssh_key;
     config.ssh.port = ssh_port;
-    config.ssh.timeout = 0;
+    config.ssh.timeout = 10;
     hs_tui_print_blank();
 
     hs_tui_print_step(3, "Devices");

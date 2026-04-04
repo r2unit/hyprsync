@@ -18,7 +18,8 @@ static char *build_ssh_cmd(const hs_sync *s, const hs_device *device) {
     char *key = get_ssh_key(s, device);
     char buf[1024];
     snprintf(buf, sizeof(buf),
-             "ssh -i %s -p %d -o StrictHostKeyChecking=no -o ConnectTimeout=%d",
+             "ssh -i %s -p %d -o StrictHostKeyChecking=accept-new"
+             " -o BatchMode=yes -o ConnectTimeout=%d -o LogLevel=ERROR",
              key, device->port, s->config->ssh.timeout);
     free(key);
     return strdup(buf);
@@ -53,6 +54,8 @@ static hs_exec_result remote_exec(const hs_sync *s, const hs_device *device,
     hs_vec_push(&args, strdup("BatchMode=yes"));
     hs_vec_push(&args, strdup("-o"));
     hs_vec_push(&args, strdup("StrictHostKeyChecking=accept-new"));
+    hs_vec_push(&args, strdup("-o"));
+    hs_vec_push(&args, strdup("LogLevel=ERROR"));
     hs_vec_push(&args, userhost);
     hs_vec_push(&args, strdup(command));
 
@@ -68,7 +71,7 @@ static hs_strvec build_rsync_cmd(const hs_sync *s, const hs_device *device,
     hs_strvec cmd;
     hs_vec_init(&cmd);
     hs_vec_push(&cmd, strdup("rsync"));
-    hs_vec_push(&cmd, strdup("-avz"));
+    hs_vec_push(&cmd, strdup("-az"));
     hs_vec_push(&cmd, strdup("--checksum"));
     hs_vec_push(&cmd, strdup("--partial"));
     hs_vec_push(&cmd, strdup("--delete"));
@@ -279,6 +282,8 @@ int hs_sync_ping(hs_sync *s, const hs_device *device) {
     hs_vec_push(&args, strdup("BatchMode=yes"));
     hs_vec_push(&args, strdup("-o"));
     hs_vec_push(&args, strdup("StrictHostKeyChecking=accept-new"));
+    hs_vec_push(&args, strdup("-o"));
+    hs_vec_push(&args, strdup("LogLevel=ERROR"));
     hs_vec_push(&args, userhost);
     hs_vec_push(&args, strdup("echo ok"));
 
@@ -288,8 +293,12 @@ int hs_sync_ping(hs_sync *s, const hs_device *device) {
     int ok = 0;
     if (hs_exec_success(&result)) {
         char *trimmed = hs_trim(result.stdout_output);
-        if (trimmed && strcmp(trimmed, "ok") == 0)
-            ok = 1;
+        if (trimmed) {
+            char *last_nl = strrchr(trimmed, '\n');
+            const char *last_line = last_nl ? last_nl + 1 : trimmed;
+            if (strcmp(last_line, "ok") == 0)
+                ok = 1;
+        }
         free(trimmed);
     }
 

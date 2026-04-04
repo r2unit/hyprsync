@@ -310,7 +310,7 @@ hs_exec_result hs_exec_args_dir(const hs_strvec *args, const char *workdir) {
     size_t cmd_len = 0, cmd_cap = 0;
 
     append_buf(&cmd, &cmd_len, &cmd_cap, "cd ", 3);
-    append_buf(&cmd, &cmd_len, &cmd_cap, workdir, strlen(workdir));
+    append_quoted_arg(&cmd, &cmd_len, &cmd_cap, workdir);
     append_buf(&cmd, &cmd_len, &cmd_cap, " && ", 4);
 
     for (size_t i = 0; i < args->len; i++) {

@@ -445,6 +445,8 @@ static int cmd_ping(hs_cli *cli) {
         hs_vec_push(&args, strdup("BatchMode=yes"));
         hs_vec_push(&args, strdup("-o"));
         hs_vec_push(&args, strdup("StrictHostKeyChecking=accept-new"));
+        hs_vec_push(&args, strdup("-o"));
+        hs_vec_push(&args, strdup("LogLevel=ERROR"));
         hs_vec_push(&args, strdup(userhost));
         hs_vec_push(&args, strdup("echo ok"));
 
@@ -452,7 +454,12 @@ static int cmd_ping(hs_cli *cli) {
         hs_strvec_free(&args);
 
         char *trimmed = hs_trim(result.stdout_output);
-        if (hs_exec_success(&result) && trimmed && strcmp(trimmed, "ok") == 0) {
+        const char *last_line = trimmed;
+        if (trimmed) {
+            char *last_nl = strrchr(trimmed, '\n');
+            if (last_nl) last_line = last_nl + 1;
+        }
+        if (hs_exec_success(&result) && last_line && strcmp(last_line, "ok") == 0) {
             printf("OK\n");
         } else {
             printf("FAILED\n");

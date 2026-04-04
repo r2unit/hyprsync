@@ -89,17 +89,20 @@ static void handle_changes(hs_daemon *d, hs_eventvec *events) {
     free(message);
 
     if (!d->config.dry_run) {
-        hs_sync_resultvec results = hs_sync_all(d->sync, 0);
-        for (size_t i = 0; i < results.len; i++) {
-            hs_sync_result *r = &results.data[i];
-            if (r->success) {
-                hs_info("synced %s to %s", r->group_name, r->device_name);
-            } else {
-                hs_error("failed to sync %s to %s: %s",
-                         r->group_name, r->device_name, r->error_message);
+        for (size_t di = 0; di < d->config.devices.len; di++) {
+            const hs_device *device = &d->config.devices.data[di];
+            for (size_t gi = 0; gi < d->config.sync_groups.len; gi++) {
+                const hs_sync_group *group = &d->config.sync_groups.data[gi];
+                hs_sync_result r = hs_sync_run_group(d->sync, group, device, 0);
+                if (r.success) {
+                    hs_info("synced %s to %s", r.group_name, r.device_name);
+                } else {
+                    hs_error("failed to sync %s to %s: %s",
+                             r.group_name, r.device_name, r.error_message);
+                }
+                hs_sync_result_free(&r);
             }
         }
-        hs_sync_resultvec_free(&results);
     }
 }
 

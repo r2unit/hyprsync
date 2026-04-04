@@ -7,6 +7,7 @@ set(COMMON_INCLUDES
 
 set(BASE_SOURCES
     ${CMAKE_SOURCE_DIR}/src/util.c
+    ${CMAKE_SOURCE_DIR}/src/log.c
     ${CMAKE_SOURCE_DIR}/src/config.c
     ${CMAKE_SOURCE_DIR}/vendor/tomlc17/tomlc17.c
 )
