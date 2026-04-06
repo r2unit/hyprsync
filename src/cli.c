@@ -15,6 +15,8 @@
 #include <string.h>
 
 static void print_usage(void);
+static void print_upgrade_help(void);
+static void print_conflicts_help(void);
 static int load_config(hs_cli *cli);
 static int cmd_init(hs_cli *cli);
 static int cmd_daemon(hs_cli *cli);
@@ -42,6 +44,7 @@ void hs_cli_init(hs_cli *cli, int argc, char *argv[]) {
     cli->options.verbose = 0;
     cli->options.quiet = 0;
     cli->options.devel = 0;
+    cli->options.help = 0;
 
     for (int i = 1; i < argc; ++i) {
         const char *arg = argv[i];
@@ -70,8 +73,7 @@ void hs_cli_init(hs_cli *cli, int argc, char *argv[]) {
                 cli->options.device = strdup(argv[++i]);
             }
         } else if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
-            free(cli->options.command);
-            cli->options.command = strdup("help");
+            cli->options.help = 1;
         } else if (arg[0] != '-') {
             if (!cli->options.command) {
                 cli->options.command = strdup(arg);
@@ -83,6 +85,8 @@ void hs_cli_init(hs_cli *cli, int argc, char *argv[]) {
 
     if (!cli->options.command) {
         cli->options.command = strdup("help");
+    } else if (cli->options.help) {
+        hs_vec_push(&cli->options.args, strdup("help"));
     }
 }
 
@@ -474,7 +478,27 @@ static int cmd_ping(hs_cli *cli) {
     return failures > 0 ? 1 : 0;
 }
 
+static void print_conflicts_help(void) {
+    printf("usage: hyprsync conflicts [command] [options]\n");
+    printf("\n");
+    printf("commands:\n");
+    printf("    resolve           resolve conflicts interactively\n");
+    printf("\n");
+    printf("options:\n");
+    printf("    -a, --auto        resolve using configured strategy\n");
+    printf("\n");
+    printf("examples:\n");
+    printf("    hyprsync conflicts                list all conflicts\n");
+    printf("    hyprsync conflicts resolve        resolve interactively\n");
+    printf("    hyprsync conflicts resolve --auto  resolve automatically\n");
+}
+
 static int cmd_conflicts(hs_cli *cli) {
+    if (cli->options.help) {
+        print_conflicts_help();
+        return 0;
+    }
+
     if (load_config(cli) != 0) {
         fprintf(stderr, "no config found. run 'hyprsync init' first.\n");
         return 1;
@@ -624,7 +648,30 @@ static int cmd_restore(hs_cli *cli) {
     return 0;
 }
 
+static void print_upgrade_help(void) {
+    printf("usage: hyprsync upgrade [command] [options]\n");
+    printf("\n");
+    printf("commands:\n");
+    printf("    check             check for available updates\n");
+    printf("    list              list available versions\n");
+    printf("    <version>         upgrade to a specific version\n");
+    printf("\n");
+    printf("options:\n");
+    printf("    --devel           use development builds\n");
+    printf("\n");
+    printf("examples:\n");
+    printf("    hyprsync upgrade              upgrade to latest stable\n");
+    printf("    hyprsync upgrade check        check for updates\n");
+    printf("    hyprsync upgrade --devel      upgrade to latest dev build\n");
+    printf("    hyprsync upgrade v2026.4.3    upgrade to specific version\n");
+}
+
 static int cmd_upgrade(hs_cli *cli) {
+    if (cli->options.help) {
+        print_upgrade_help();
+        return 0;
+    }
+
     if (cli->options.devel && cli->options.args.len == 0) {
         return hs_upgrade_to_latest_dev() ? 0 : 1;
     }
@@ -710,22 +757,17 @@ static void print_usage(void) {
     printf("    hyprsync <command> [options]\n");
     printf("\n");
     printf("commands:\n");
-    printf("    init              interactive setup wizard\n");
-    printf("    daemon            start the sync daemon\n");
-    printf("    sync              run a one-shot sync\n");
-    printf("    restore           restore files from repo to original locations\n");
-    printf("    status            show sync status\n");
-    printf("    diff [device]     show pending changes\n");
-    printf("    log               show sync history\n");
-    printf("    ping              test device connectivity\n");
-    printf("    conflicts         list sync conflicts\n");
-    printf("    conflicts resolve resolve conflicts interactively\n");
-    printf("    conflicts resolve --auto  resolve using configured strategy\n");
-    printf("    upgrade [version] upgrade to latest or specific version\n");
-    printf("    upgrade --devel   upgrade to latest development build\n");
-    printf("    upgrade list      list available versions\n");
-    printf("    upgrade check     check for updates\n");
-    printf("    version           show version info\n");
+    printf("    init          interactive setup wizard\n");
+    printf("    daemon        start the sync daemon\n");
+    printf("    sync          run a one-shot sync\n");
+    printf("    restore       restore files from repo to original locations\n");
+    printf("    status        show sync status\n");
+    printf("    diff          show pending changes\n");
+    printf("    log           show sync history\n");
+    printf("    ping          test device connectivity\n");
+    printf("    conflicts     list and resolve sync conflicts\n");
+    printf("    upgrade       manage upgrades\n");
+    printf("    version       show version info\n");
     printf("\n");
     printf("options:\n");
     printf("    -c, --config <path>   config file path\n");
@@ -734,7 +776,7 @@ static void print_usage(void) {
     printf("    -q, --quiet           suppress non-error output\n");
     printf("    -g, --group <name>    only sync a specific group\n");
     printf("    -d, --device <name>   only sync with a specific device\n");
-    printf("    -h, --help            show this help\n");
+    printf("    -h, --help            show help (use with command for details)\n");
     printf("\n");
     printf("made with \xF0\x9F\xA7\x80 by r2unit\n");
 }

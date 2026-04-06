@@ -10,6 +10,7 @@ typedef struct {
     int verbose;
     int quiet;
     int devel;
+    int help;
     char *group;
     char *device;
     hs_strvec args;
