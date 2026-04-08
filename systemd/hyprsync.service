@@ -1,6 +1,6 @@
 [Unit]
 Description=HyprSync - Dotfile sync daemon
-Documentation=https://github.com/youruser/hyprsync
+Documentation=https://github.com/r2unit/hyprsync
 After=network-online.target
 Wants=network-online.target
 
