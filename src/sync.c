@@ -64,6 +64,15 @@ static hs_exec_result remote_exec(const hs_sync *s, const hs_device *device,
     return result;
 }
 
+static int ensure_remote_dir(const hs_sync *s, const hs_device *device) {
+    char cmd[1024];
+    snprintf(cmd, sizeof(cmd), "mkdir -p %s", s->config->git.repo);
+    hs_exec_result res = remote_exec(s, device, cmd);
+    int ok = hs_exec_success(&res);
+    hs_exec_result_free(&res);
+    return ok;
+}
+
 static hs_strvec build_rsync_cmd(const hs_sync *s, const hs_device *device,
                                  int dry_run) {
     char *ssh_cmd = build_ssh_cmd(s, device);
@@ -141,6 +150,11 @@ hs_sync_result hs_sync_run_group(hs_sync *s, const hs_sync_group *group,
             result.success = 1;
             return result;
         }
+    }
+
+    if (!ensure_remote_dir(s, device)) {
+        result.error_message = strdup("failed to create remote directory");
+        return result;
     }
 
     hs_strvec rsync_cmd = build_rsync_cmd(s, device, dry_run);
