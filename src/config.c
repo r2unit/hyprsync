@@ -93,7 +93,7 @@ hs_config hs_load_config(const char *path) {
         config.conflict_strategy = hs_conflict_strategy_from_string(cs_str);
         free(cs_str);
 
-        config.poll_interval = (int)get_int_or(general, "poll_interval", 0);
+        config.poll_interval = (int)get_int_or(general, "poll_interval", 300);
         config.dry_run = get_bool_or(general, "dry_run", 0);
         config.log_level = get_string_or(general, "log_level", "info");
     } else {
@@ -122,10 +122,12 @@ hs_config hs_load_config(const char *path) {
         free(key_str);
         config.ssh.port = (int)get_int_or(ssh, "port", 22);
         config.ssh.timeout = (int)get_int_or(ssh, "timeout", 10);
+        config.ssh.multiplex = get_bool_or(ssh, "multiplex", 1);
     } else {
         config.ssh.key = hs_expand_path("~/.ssh/id_ed25519");
         config.ssh.port = 22;
         config.ssh.timeout = 10;
+        config.ssh.multiplex = 1;
     }
 
     hs_vec_init(&config.devices);
@@ -308,6 +310,7 @@ void hs_save_config(const hs_config *config, const char *path) {
     fprintf(fp, "key = \"%s\"\n", config->ssh.key ? config->ssh.key : "");
     fprintf(fp, "port = %d\n", config->ssh.port);
     fprintf(fp, "timeout = %d\n", config->ssh.timeout);
+    fprintf(fp, "multiplex = %s\n", config->ssh.multiplex ? "true" : "false");
     fprintf(fp, "\n");
 
     for (size_t i = 0; i < config->devices.len; i++) {

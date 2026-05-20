@@ -16,11 +16,21 @@ static char *get_ssh_key(const hs_sync *s, const hs_device *device) {
 
 static char *build_ssh_cmd(const hs_sync *s, const hs_device *device) {
     char *key = get_ssh_key(s, device);
-    char buf[1024];
-    snprintf(buf, sizeof(buf),
-             "ssh -i %s -p %d -o StrictHostKeyChecking=accept-new"
-             " -o BatchMode=yes -o ConnectTimeout=%d -o LogLevel=ERROR",
-             key, device->port, s->config->ssh.timeout);
+    char buf[2048];
+    if (s->config->ssh.multiplex) {
+        snprintf(buf, sizeof(buf),
+                 "ssh -i %s -p %d -o StrictHostKeyChecking=accept-new"
+                 " -o BatchMode=yes -o ConnectTimeout=%d -o LogLevel=ERROR"
+                 " -o ControlMaster=auto"
+                 " -o ControlPath=/tmp/hyprsync-%%r@%%h:%%p"
+                 " -o ControlPersist=60",
+                 key, device->port, s->config->ssh.timeout);
+    } else {
+        snprintf(buf, sizeof(buf),
+                 "ssh -i %s -p %d -o StrictHostKeyChecking=accept-new"
+                 " -o BatchMode=yes -o ConnectTimeout=%d -o LogLevel=ERROR",
+                 key, device->port, s->config->ssh.timeout);
+    }
     free(key);
     return strdup(buf);
 }
@@ -113,6 +123,126 @@ static hs_strvec build_rsync_cmd(const hs_sync *s, const hs_device *device,
     }
 
     return cmd;
+}
+
+static hs_strvec build_rsync_pull_cmd(const hs_sync *s, const hs_device *device,
+                                      int dry_run) {
+    char *ssh_cmd = build_ssh_cmd(s, device);
+
+    hs_strvec cmd;
+    hs_vec_init(&cmd);
+    hs_vec_push(&cmd, strdup("rsync"));
+    hs_vec_push(&cmd, strdup("-az"));
+    hs_vec_push(&cmd, strdup("--checksum"));
+    hs_vec_push(&cmd, strdup("--partial"));
+    hs_vec_push(&cmd, strdup("--delete"));
+    hs_vec_push(&cmd, strdup("--exclude=.git/"));
+    hs_vec_push(&cmd, strdup("-e"));
+    hs_vec_push(&cmd, ssh_cmd);
+
+    if (dry_run)
+        hs_vec_push(&cmd, strdup("--dry-run"));
+
+    // source: remote's git repo working tree
+    {
+        size_t slen = strlen(device->user) + 1 + strlen(device->host) + 1 +
+                      strlen(s->config->git.repo) + 2;
+        char *src = malloc(slen);
+        snprintf(src, slen, "%s@%s:%s/", device->user, device->host,
+                 s->config->git.repo);
+        hs_vec_push(&cmd, src);
+    }
+
+    // destination: our local git repo working tree
+    const char *repo = s->git->repo_path;
+    size_t rlen = strlen(repo);
+    if (rlen > 0 && repo[rlen - 1] != '/') {
+        char *dest = malloc(rlen + 2);
+        memcpy(dest, repo, rlen);
+        dest[rlen] = '/';
+        dest[rlen + 1] = '\0';
+        hs_vec_push(&cmd, dest);
+    } else {
+        hs_vec_push(&cmd, strdup(repo));
+    }
+
+    return cmd;
+}
+
+hs_sync_result hs_sync_pull_from_device(hs_sync *s, const hs_device *device,
+                                        int dry_run) {
+    hs_sync_result result;
+    memset(&result, 0, sizeof(result));
+    result.device_name = hs_strdup_safe(device->name);
+    result.group_name = strdup("all");
+    result.success = 0;
+    result.files_synced = 0;
+    result.has_conflicts = 0;
+    hs_vec_init(&result.conflict_files);
+
+    if (!ensure_remote_dir(s, device)) {
+        result.error_message = strdup("failed to reach remote");
+        return result;
+    }
+
+    hs_strvec rsync_cmd = build_rsync_pull_cmd(s, device, dry_run);
+    hs_exec_result exec_res = hs_exec_args(&rsync_cmd);
+    hs_strvec_free(&rsync_cmd);
+
+    if (!hs_exec_success(&exec_res)) {
+        result.error_message = hs_strdup_safe(exec_res.stderr_output);
+        hs_exec_result_free(&exec_res);
+        return result;
+    }
+    hs_exec_result_free(&exec_res);
+
+    if (dry_run) {
+        result.success = 1;
+        return result;
+    }
+
+    // stage what we received — do NOT call hs_git_snapshot here because
+    // that would overwrite remote's files with our local live copies
+    hs_git_add_all(s->git);
+
+    if (!hs_git_has_changes(s->git)) {
+        result.success = 1;
+        return result;
+    }
+
+    if (hs_git_has_conflicts(s->git)) {
+        result.has_conflicts = 1;
+        result.error_message = strdup("conflicts after pull from remote");
+        hs_conflictvec conflicts = hs_git_get_conflicts(s->git);
+        for (size_t i = 0; i < conflicts.len; i++)
+            hs_vec_push(&result.conflict_files, strdup(conflicts.data[i].path));
+        hs_conflictvec_free(&conflicts);
+        return result;
+    }
+
+    size_t msg_len = strlen("hyprsync: pull from ") + strlen(device->name) + 1;
+    char *msg = malloc(msg_len);
+    snprintf(msg, msg_len, "hyprsync: pull from %s", device->name);
+    hs_git_commit(s->git, msg);
+    free(msg);
+
+    hs_git_restore(s->git, &s->config->sync_groups);
+
+    result.success = 1;
+    return result;
+}
+
+hs_sync_resultvec hs_sync_pull_all(hs_sync *s, int dry_run) {
+    hs_sync_resultvec results;
+    hs_vec_init(&results);
+
+    for (size_t d = 0; d < s->config->devices.len; d++) {
+        const hs_device *device = &s->config->devices.data[d];
+        hs_sync_result r = hs_sync_pull_from_device(s, device, dry_run);
+        hs_vec_push(&results, r);
+    }
+
+    return results;
 }
 
 hs_sync *hs_sync_create(const hs_config *config, hs_git *git) {
@@ -213,6 +343,26 @@ hs_sync_resultvec hs_sync_all(hs_sync *s, int dry_run) {
         return results;
     }
 
+    // pull mode: only fetch from remotes
+    if (s->config->mode == HS_SYNC_PULL) {
+        if (s->config->hooks.pre_sync && s->config->hooks.pre_sync[0]) {
+            hs_exec_result pre = hs_exec(s->config->hooks.pre_sync);
+            hs_exec_result_free(&pre);
+        }
+
+        hs_sync_resultvec pull_results = hs_sync_pull_all(s, dry_run);
+        for (size_t i = 0; i < pull_results.len; i++)
+            hs_vec_push(&results, pull_results.data[i]);
+        hs_vec_free(&pull_results);
+
+        if (s->config->hooks.post_sync && s->config->hooks.post_sync[0]) {
+            hs_exec_result post = hs_exec(s->config->hooks.post_sync);
+            hs_exec_result_free(&post);
+        }
+
+        return results;
+    }
+
     if (s->config->hooks.pre_sync && s->config->hooks.pre_sync[0]) {
         hs_exec_result pre = hs_exec(s->config->hooks.pre_sync);
         hs_exec_result_free(&pre);
@@ -240,6 +390,19 @@ hs_sync_resultvec hs_sync_all(hs_sync *s, int dry_run) {
         }
         hs_git_commit(s->git, message);
         free(message);
+    }
+
+    // bidirectional: pull from each device first so we merge their changes,
+    // then push the merged result back to them
+    if (s->config->mode == HS_SYNC_BIDIRECTIONAL) {
+        for (size_t d = 0; d < s->config->devices.len; d++) {
+            const hs_device *device = &s->config->devices.data[d];
+            hs_sync_result r = hs_sync_pull_from_device(s, device, dry_run);
+            if (!r.success && r.error_message) {
+                hs_warn("pull from %s failed: %s", device->name, r.error_message);
+            }
+            hs_sync_result_free(&r);
+        }
     }
 
     for (size_t d = 0; d < s->config->devices.len; d++) {

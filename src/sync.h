@@ -34,6 +34,9 @@ hs_sync_result hs_sync_run_group(hs_sync *s, const hs_sync_group *group,
                                 const hs_device *device, int dry_run);
 hs_sync_resultvec hs_sync_all(hs_sync *s, int dry_run);
 
+hs_sync_result hs_sync_pull_from_device(hs_sync *s, const hs_device *device, int dry_run);
+hs_sync_resultvec hs_sync_pull_all(hs_sync *s, int dry_run);
+
 hs_diff_result hs_sync_diff(hs_sync *s, const hs_device *device);
 
 int hs_sync_ping(hs_sync *s, const hs_device *device);

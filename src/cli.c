@@ -21,6 +21,7 @@ static int load_config(hs_cli *cli);
 static int cmd_init(hs_cli *cli);
 static int cmd_daemon(hs_cli *cli);
 static int cmd_sync(hs_cli *cli);
+static int cmd_pull(hs_cli *cli);
 static int cmd_status(hs_cli *cli);
 static int cmd_diff(hs_cli *cli);
 static int cmd_log(hs_cli *cli);
@@ -125,6 +126,7 @@ int hs_cli_run(hs_cli *cli) {
     if (strcmp(cmd, "init") == 0) return cmd_init(cli);
     if (strcmp(cmd, "daemon") == 0) return cmd_daemon(cli);
     if (strcmp(cmd, "sync") == 0) return cmd_sync(cli);
+    if (strcmp(cmd, "pull") == 0) return cmd_pull(cli);
     if (strcmp(cmd, "status") == 0) return cmd_status(cli);
     if (strcmp(cmd, "diff") == 0) return cmd_diff(cli);
     if (strcmp(cmd, "log") == 0) return cmd_log(cli);
@@ -293,6 +295,93 @@ static int cmd_sync(hs_cli *cli) {
     hs_sync_free(s);
     hs_git_free(git);
     return 0;
+}
+
+static int cmd_pull(hs_cli *cli) {
+    if (load_config(cli) != 0) {
+        fprintf(stderr, "no config found. run 'hyprsync init' first.\n");
+        return 1;
+    }
+
+    hs_git *git = hs_git_create(&cli->config.git, cli->config.hostname);
+
+    if (!hs_git_is_initialized(git)) {
+        fprintf(stderr, "git repo not initialized. run 'hyprsync init' first.\n");
+        hs_git_free(git);
+        return 1;
+    }
+
+    hs_sync *s = hs_sync_create(&cli->config, git);
+    int dry_run = cli->options.dry_run || cli->config.dry_run;
+
+    if (dry_run) {
+        printf("dry-run mode: showing what would be pulled\n\n");
+    }
+
+    if (cli->config.devices.len == 0) {
+        printf("no devices configured\n");
+        hs_sync_free(s);
+        hs_git_free(git);
+        return 0;
+    }
+
+    int failures = 0;
+
+    if (cli->options.device) {
+        const hs_device *device = NULL;
+        for (size_t i = 0; i < cli->config.devices.len; i++) {
+            if (strcmp(cli->config.devices.data[i].name, cli->options.device) == 0) {
+                device = &cli->config.devices.data[i];
+                break;
+            }
+        }
+
+        if (!device) {
+            fprintf(stderr, "unknown device: %s\n", cli->options.device);
+            hs_sync_free(s);
+            hs_git_free(git);
+            return 1;
+        }
+
+        hs_sync_result r = hs_sync_pull_from_device(s, device, dry_run);
+        if (r.success) {
+            printf("pulled from %s\n", r.device_name);
+        } else {
+            fprintf(stderr, "pull from %s failed: %s\n",
+                    r.device_name, r.error_message ? r.error_message : "unknown error");
+            failures++;
+        }
+        hs_sync_result_free(&r);
+    } else {
+        hs_sync_resultvec results = hs_sync_pull_all(s, dry_run);
+
+        for (size_t i = 0; i < results.len; i++) {
+            hs_sync_result *r = &results.data[i];
+            if (r->success) {
+                printf("pulled from %s\n", r->device_name);
+            } else if (r->has_conflicts) {
+                fprintf(stderr, "conflicts after pull from %s:\n", r->device_name);
+                for (size_t j = 0; j < r->conflict_files.len; j++)
+                    fprintf(stderr, "  %s\n", r->conflict_files.data[j]);
+                fprintf(stderr, "\nresolve with 'hyprsync conflicts resolve'\n");
+                failures++;
+            } else {
+                fprintf(stderr, "pull from %s failed: %s\n",
+                        r->device_name, r->error_message ? r->error_message : "unknown error");
+                failures++;
+            }
+        }
+
+        hs_sync_resultvec_free(&results);
+    }
+
+    if (!dry_run && failures == 0) {
+        printf("\npull complete\n");
+    }
+
+    hs_sync_free(s);
+    hs_git_free(git);
+    return failures > 0 ? 1 : 0;
 }
 
 static int cmd_status(hs_cli *cli) {
@@ -767,6 +856,7 @@ static void print_usage(void) {
     printf("    init          interactive setup wizard\n");
     printf("    daemon        start the sync daemon\n");
     printf("    sync          run a one-shot sync\n");
+    printf("    pull          pull configs from remote devices\n");
     printf("    restore       restore files from repo to original locations\n");
     printf("    status        show sync status\n");
     printf("    diff          show pending changes\n");

@@ -29,6 +29,7 @@ void hs_git_snapshot(hs_git *g, const hs_groupvec *groups);
 void hs_git_snapshot_changed(hs_git *g, const hs_strvec *changed_paths,
                              const hs_groupvec *groups);
 void hs_git_restore(hs_git *g, const hs_groupvec *groups);
+void hs_git_add_all(hs_git *g);
 
 int hs_git_commit(hs_git *g, const char *message);
 int hs_git_has_changes(const hs_git *g);

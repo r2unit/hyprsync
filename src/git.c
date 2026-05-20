@@ -341,6 +341,16 @@ void hs_git_snapshot_changed(hs_git *g, const hs_strvec *changed_paths,
     hs_exec_result_free(&r);
 }
 
+void hs_git_add_all(hs_git *g) {
+    hs_strvec args;
+    hs_vec_init(&args);
+    hs_vec_push(&args, strdup("add"));
+    hs_vec_push(&args, strdup("-A"));
+    hs_exec_result r = git_exec(g, &args);
+    hs_strvec_free(&args);
+    hs_exec_result_free(&r);
+}
+
 void hs_git_restore(hs_git *g, const hs_groupvec *groups) {
     for (size_t i = 0; i < groups->len; i++) {
         const hs_sync_group *grp = &groups->data[i];

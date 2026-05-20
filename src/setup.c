@@ -16,7 +16,9 @@ static const char *CONFIG_SCAN[] = {
     "hypr", "waybar", "wofi", "dunst", "rofi", "kitty",
     "alacritty", "nvim", "neovim", "foot", "sway", "i3",
     "polybar", "picom", "zsh", "fish", "tmux", "wezterm",
-    "mako", "swaylock", "hyprlock", "hypridle", "hyprpaper",
+    "mako", "swaylock", "swayidle", "hyprlock", "hypridle", "hyprpaper",
+    "wlogout", "ags", "eww", "nwg-look", "nwg-panel", "nwg-drawer",
+    "gtk-3.0", "gtk-4.0", "fontconfig", "Kvantum", "qt5ct", "qt6ct",
     "starship.toml", "fastfetch",
 };
 static const size_t CONFIG_SCAN_COUNT = sizeof(CONFIG_SCAN) / sizeof(CONFIG_SCAN[0]);
@@ -24,6 +26,7 @@ static const size_t CONFIG_SCAN_COUNT = sizeof(CONFIG_SCAN) / sizeof(CONFIG_SCAN
 static const char *HOME_SCAN[] = {
     ".zshrc", ".zshenv", ".bashrc", ".bash_profile",
     ".gitconfig", ".tmux.conf", ".vimrc", ".nanorc",
+    ".gtkrc-2.0",
 };
 static const size_t HOME_SCAN_COUNT = sizeof(HOME_SCAN) / sizeof(HOME_SCAN[0]);
 
@@ -34,6 +37,7 @@ static const size_t LOCAL_SCAN_COUNT = sizeof(LOCAL_SCAN) / sizeof(LOCAL_SCAN[0]
 
 static const char *HYPRLAND_ITEMS[] = {
     "hypr", "waybar", "dunst", "hyprlock", "hypridle", "hyprpaper",
+    "wlogout", "mako", "gtk-3.0", "gtk-4.0", "fontconfig",
 };
 static const size_t HYPRLAND_ITEMS_COUNT = sizeof(HYPRLAND_ITEMS) / sizeof(HYPRLAND_ITEMS[0]);
 
@@ -597,6 +601,7 @@ hs_config hs_setup_run(void) {
     config.ssh.key = ssh_key;
     config.ssh.port = ssh_port;
     config.ssh.timeout = 10;
+    config.ssh.multiplex = 1;
     hs_tui_print_blank();
 
     hs_tui_print_step(3, "Devices");
@@ -619,7 +624,7 @@ hs_config hs_setup_run(void) {
     config.git.auto_commit = 1;
     config.git.commit_template = strdup("hyprsync: update from $hostname");
 
-    config.poll_interval = 0;
+    config.poll_interval = 300;
     config.dry_run = 0;
     config.log_level = NULL;
     config.hooks.pre_sync = NULL;

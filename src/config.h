@@ -41,6 +41,7 @@ typedef struct {
     char *key;
     int port;
     int timeout;
+    int multiplex;
 } hs_ssh_config;
 
 typedef struct {

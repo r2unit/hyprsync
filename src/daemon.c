@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef WITH_SYSTEMD
 #include <systemd/sd-daemon.h>
@@ -180,10 +181,13 @@ void hs_daemon_run(hs_daemon *d) {
     atomic_store(&d->running, true);
     hs_watcher_start(d->watcher);
 
+    time_t last_remote_poll = time(NULL);
+
     while (atomic_load(&d->running)) {
         if (atomic_load(&g_reload_requested)) {
             atomic_store(&g_reload_requested, false);
             reload_config(d);
+            last_remote_poll = time(NULL);
         }
 
         hs_eventvec events = hs_watcher_poll(d->watcher, 1000);
@@ -193,6 +197,33 @@ void hs_daemon_run(hs_daemon *d) {
         }
 
         hs_eventvec_free(&events);
+
+        // periodic pull from remotes when poll_interval is set and mode
+        // includes receiving changes (pull or bidirectional)
+        if (d->config.poll_interval > 0 &&
+            d->config.mode != HS_SYNC_PUSH &&
+            d->config.devices.len > 0) {
+
+            time_t now = time(NULL);
+            if (now - last_remote_poll >= d->config.poll_interval) {
+                last_remote_poll = now;
+                hs_debug("polling remotes for changes");
+
+                hs_sync_resultvec pull_results = hs_sync_pull_all(d->sync, 0);
+                for (size_t i = 0; i < pull_results.len; i++) {
+                    hs_sync_result *r = &pull_results.data[i];
+                    if (r->success) {
+                        hs_info("pulled from %s", r->device_name);
+                    } else if (r->has_conflicts) {
+                        hs_warn("conflicts after pull from %s - resolve with 'hyprsync conflicts resolve'",
+                                r->device_name);
+                    } else if (r->error_message) {
+                        hs_warn("pull from %s failed: %s", r->device_name, r->error_message);
+                    }
+                }
+                hs_sync_resultvec_free(&pull_results);
+            }
+        }
 
 #ifdef WITH_SYSTEMD
         sd_notify(0, "WATCHDOG=1");

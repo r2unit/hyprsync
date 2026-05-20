@@ -11,8 +11,9 @@ mode = "bidirectional"
 # Conflict resolution: "newest_wins", "manual", or "keep_both"
 conflict_strategy = "newest_wins"
 
-# How often to check for changes in seconds (0 = inotify only, no polling)
-poll_interval = 0
+# How often to check for remote changes in seconds (0 = local inotify only)
+# In bidirectional/pull mode the daemon uses this to poll remotes for changes
+poll_interval = 300
 
 # Enable dry-run by default (show what would sync without doing it)
 dry_run = false
@@ -40,12 +41,15 @@ port = 22
 # Connection timeout in seconds
 timeout = 10
 
+# Reuse SSH connections across rsync calls (much faster for frequent syncs)
+multiplex = true
+
 # ── Devices ──────────────────────────────────────────────
 
 [[device]]
 name = "desktop"
 host = "192.168.1.100"
-user = "lorenzo"
+user = "r2unit"
 port = 22
 # Optional: override SSH key for this device
 # key = "~/.ssh/id_desktop"
@@ -53,7 +57,7 @@ port = 22
 [[device]]
 name = "server"
 host = "homelab.local"
-user = "lorenzo"
+user = "r2unit"
 port = 2222
 
 # ── Sync Paths ──────────────────────────────────────────
@@ -64,6 +68,13 @@ paths = [
     "~/.config/hypr/",
     "~/.config/waybar/",
     "~/.config/dunst/",
+    "~/.config/mako/",
+    "~/.config/hyprlock/",
+    "~/.config/hypridle/",
+    "~/.config/hyprpaper/",
+    "~/.config/wlogout/",
+    "~/.config/swaylock/",
+    "~/.config/swayidle/",
 ]
 exclude = [
     "*.log",
@@ -73,11 +84,28 @@ exclude = [
 devices = []
 
 [[sync]]
+name = "theming"
+# GTK, fonts, Qt — keeps both machines visually identical
+paths = [
+    "~/.config/gtk-3.0/",
+    "~/.config/gtk-4.0/",
+    "~/.config/fontconfig/",
+    "~/.config/Kvantum/",
+    "~/.config/qt5ct/",
+    "~/.config/qt6ct/",
+    "~/.config/nwg-look/",
+    "~/.gtkrc-2.0",
+]
+devices = []
+
+[[sync]]
 name = "shell"
 paths = [
     "~/.zshrc",
+    "~/.zshenv",
     "~/.config/zsh/",
     "~/.config/starship.toml",
+    "~/.config/fish/",
 ]
 devices = []
 
@@ -86,6 +114,8 @@ name = "editor"
 paths = [
     "~/.config/nvim/",
     "~/.config/kitty/",
+    "~/.config/foot/",
+    "~/.config/alacritty/",
     "~/.gitconfig",
     "~/.tmux.conf",
 ]
